@@ -1,7 +1,9 @@
 "use client";
-import React, { useState, useCallback } from 'react';
-import { Coins, Search, Plus, Minus, User as UserIcon, Crown, ArrowUpRight } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Coins, Search, Plus, Minus, User as UserIcon, Crown, ArrowUpRight, History, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
+import { formatDistanceToNow } from 'date-fns';
+import { th } from 'date-fns/locale';
 
 interface UserResult {
     id: string;
@@ -10,6 +12,18 @@ interface UserResult {
     coins_balance: number;
     is_premium: boolean;
     created_at: string;
+}
+
+interface Transaction {
+    id: string;
+    user_id: string;
+    type: string;
+    amount: number;
+    description: string;
+    created_at: string;
+    // joined from user lookup
+    user_name?: string;
+    user_email?: string;
 }
 
 export default function CoinManagementPage() {
@@ -24,6 +38,27 @@ export default function CoinManagementPage() {
     const [coinAction, setCoinAction] = useState<'add' | 'deduct'>('add');
     const [processing, setProcessing] = useState(false);
     const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
+
+    // Transaction history
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [txLoading, setTxLoading] = useState(true);
+
+    // Fetch transaction history on mount
+    useEffect(() => {
+        fetchTransactions();
+    }, []);
+
+    const fetchTransactions = async () => {
+        setTxLoading(true);
+        try {
+            const res = await api.get('/transactions?limit=50');
+            setTransactions(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch transactions:', err);
+        } finally {
+            setTxLoading(false);
+        }
+    };
 
     const searchUsers = useCallback(async (query: string) => {
         setSearching(true);
@@ -71,6 +106,9 @@ export default function CoinManagementPage() {
 
             setCoinAmount('');
             setCoinReason('');
+
+            // Refresh transaction history
+            fetchTransactions();
         } catch (err: any) {
             setResult({
                 error: err?.response?.data?.detail || err.message || 'เกิดข้อผิดพลาด'
@@ -80,8 +118,21 @@ export default function CoinManagementPage() {
         }
     };
 
+    const formatTxType = (type: string, amount: number) => {
+        if (type.includes('admin_adjust_add')) return { label: 'Admin เพิ่ม', color: 'bg-green-50 text-green-700', icon: '+' };
+        if (type.includes('admin_adjust_deduct')) return { label: 'Admin หัก', color: 'bg-red-50 text-red-700', icon: '−' };
+        if (type.includes('premium')) return { label: 'Premium', color: 'bg-purple-50 text-purple-700', icon: '★' };
+        if (amount < 0) return { label: 'ใช้ Coin', color: 'bg-orange-50 text-orange-700', icon: '−' };
+        return { label: 'เติม Coin', color: 'bg-blue-50 text-blue-700', icon: '+' };
+    };
+
+    // Filter admin-only transactions
+    const adminTransactions = transactions.filter(t =>
+        t.type?.includes('admin') || t.description?.toLowerCase().includes('admin')
+    );
+
     return (
-        <div className="max-w-5xl mx-auto space-y-8 py-2">
+        <div className="max-w-6xl mx-auto space-y-8 py-2">
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -268,6 +319,90 @@ export default function CoinManagementPage() {
                         <div className="bg-white rounded-xl border border-slate-100 p-8 text-center">
                             <Coins size={32} className="text-slate-300 mx-auto mb-3" />
                             <p className="text-sm text-slate-400">เลือกผู้ใช้จากรายการเพื่อจัดการ Coin</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ═══════════════════════════════════════════════════ */}
+            {/* Transaction History Section */}
+            {/* ═══════════════════════════════════════════════════ */}
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                        <History size={18} className="text-slate-400" />
+                        <h2 className="text-lg font-semibold text-slate-900">ประวัติการปรับ Coin (Admin)</h2>
+                        <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
+                            {adminTransactions.length} รายการ
+                        </span>
+                    </div>
+                    <button
+                        onClick={fetchTransactions}
+                        className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1.5 transition-colors px-3 py-1.5 rounded-md hover:bg-slate-50"
+                    >
+                        <RefreshCw size={14} className={txLoading ? 'animate-spin' : ''} />
+                        รีเฟรช
+                    </button>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+                    {txLoading ? (
+                        <div className="p-8 flex justify-center">
+                            <RefreshCw size={20} className="animate-spin text-slate-300" />
+                        </div>
+                    ) : adminTransactions.length === 0 ? (
+                        <div className="p-8 text-center text-sm text-slate-400">
+                            ยังไม่มีประวัติการปรับ Coin โดย Admin
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50/80 text-left">
+                                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">ประเภท</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">User ID</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">จำนวน</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">เหตุผล</th>
+                                        <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">เวลา</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {adminTransactions.map((tx) => {
+                                        const txInfo = formatTxType(tx.type, tx.amount);
+                                        return (
+                                            <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-4 py-3">
+                                                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${txInfo.color}`}>
+                                                        {txInfo.icon} {txInfo.label}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="text-xs text-slate-500 font-mono">
+                                                        {tx.user_id?.substring(0, 12)}...
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`font-semibold ${tx.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {tx.amount >= 0 ? '+' : ''}{tx.amount?.toLocaleString()}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 max-w-[200px]">
+                                                    <span className="text-slate-600 truncate block" title={tx.description}>
+                                                        {tx.description || '-'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className="text-xs text-slate-400">
+                                                        {tx.created_at
+                                                            ? formatDistanceToNow(new Date(tx.created_at), { addSuffix: true, locale: th })
+                                                            : '-'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
