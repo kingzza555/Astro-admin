@@ -1,12 +1,14 @@
 "use client";
 import React from 'react';
-import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap, Bell, Coins } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const NAV_ITEMS = [
     { label: 'Overview', icon: LayoutDashboard, href: '/' },
     { label: 'Users', icon: Users, href: '/users' },
+    { label: 'Notifications', icon: Bell, href: '/notifications' },
+    { label: 'Coin Management', icon: Coins, href: '/coins' },
     { label: 'ai-model-use', icon: Zap, href: '/usage' },
     { label: 'Inspector', icon: Sparkles, href: '/inspector' },
     { label: 'Transactions', icon: History, href: '/transactions' },
