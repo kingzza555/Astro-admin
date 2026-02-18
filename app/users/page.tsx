@@ -1,32 +1,27 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Search, Plus, Filter, MoreVertical, Coins, Crown, Edit } from 'lucide-react';
 import api from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 
 export default function UsersPage() {
-    const [users, setUsers] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
 
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            const res = await api.get('/users?limit=50');
-            setUsers(res.data || []);
-        } catch (error) {
-            console.error(error);
-            // Fallback Mock
-            setUsers([
-                { id: '1', email: 'test@gmail.com', display_name: 'Test User', coins_balance: 504, is_premium: false, created_at: '2023-01-01' },
-            ]);
-        } finally {
-            setLoading(false);
+    const { data: users = [], isLoading: loading } = useQuery({
+        queryKey: ['users'],
+        queryFn: async () => {
+            try {
+                const res = await api.get('/users?limit=50');
+                return res.data || [];
+            } catch (error) {
+                console.error(error);
+                // Fallback Mock for Demo
+                return [
+                    { id: '1', email: 'test@gmail.com', display_name: 'Test User', coins_balance: 504, is_premium: false, created_at: '2023-01-01' },
+                ];
+            }
         }
-    };
+    });
 
     const filteredUsers = users.filter(u =>
         u.email?.toLowerCase().includes(search.toLowerCase()) ||
