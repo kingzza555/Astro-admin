@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '../../lib/api';
+import api from '@/lib/api';
 import { Shield, Save, ArrowLeft, Loader2, Check } from 'lucide-react';
 import Link from 'next/link';
 
@@ -139,13 +139,13 @@ export default function CreateAdminPage() {
                                         type="button"
                                         onClick={() => handlePermissionToggle(perm.id)}
                                         className={`flex items-start p-4 rounded-lg border text-left transition-all ${formData.permissions.includes(perm.id)
-                                                ? 'bg-purple-900/30 border-purple-500 md:ring-1 md:ring-purple-500'
-                                                : 'bg-gray-900 border-gray-700 hover:border-gray-500'
+                                            ? 'bg-purple-900/30 border-purple-500 md:ring-1 md:ring-purple-500'
+                                            : 'bg-gray-900 border-gray-700 hover:border-gray-500'
                                             }`}
                                     >
                                         <div className={`mt-0.5 mr-3 w-5 h-5 rounded border flex items-center justify-center ${formData.permissions.includes(perm.id)
-                                                ? 'bg-purple-600 border-purple-600'
-                                                : 'border-gray-500'
+                                            ? 'bg-purple-600 border-purple-600'
+                                            : 'border-gray-500'
                                             }`}>
                                             {formData.permissions.includes(perm.id) && <Check className="h-3 w-3 text-white" />}
                                         </div>
