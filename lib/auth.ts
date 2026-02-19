@@ -18,16 +18,15 @@ export const authService = {
             formData.append('username', username);
             formData.append('password', password);
 
-            // Handle API_URL (Remove trailing /api/admin if present to avoid duplication, or just use it correctly)
-            // Strategy: Check if API_URL ends with /api/admin. 
-            // Better: Just assume API_URL is the base for admin routes if currently set that way.
+            // Normalize API URL: Ensure no trailing slash
+            const baseUrl = API_URL.replace(/\/$/, "");
 
-            let loginUrl = `${API_URL}/login`; // If API_URL is .../api/admin, this becomes .../api/admin/login
-
-            // Fallback for localhost default which doesn't have path
-            if (!API_URL.includes('/api/admin')) {
-                loginUrl = `${API_URL}/api/admin/login`;
-            }
+            // Construct login URL
+            // If baseUrl already ends with /api/admin, just append /login
+            // Otherwise, append /api/admin/login
+            let loginUrl = baseUrl.endsWith('/api/admin')
+                ? `${baseUrl}/login`
+                : `${baseUrl}/api/admin/login`;
 
             console.log("Attempting login to:", loginUrl); // Debug log
 
