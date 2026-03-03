@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, MoreVertical, Coins, Crown, Edit, RefreshCw, UserCheck, UserX, ArrowUpDown } from 'lucide-react';
+import { Search, Filter, MoreVertical, Coins, Crown, Edit, RefreshCw, UserCheck, UserX, ArrowUpDown, Ban, Eye, Download, ShieldBan } from 'lucide-react';
 import api from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
 type SortKey = 'display_name' | 'coins_balance' | 'created_at';
 
@@ -11,6 +12,10 @@ export default function UsersPage() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'premium' | 'free'>('all');
     const [sortKey, setSortKey] = useState<SortKey>('created_at');
     const [sortAsc, setSortAsc] = useState(false);
+    const [banModal, setBanModal] = useState<any>(null);
+    const [banReason, setBanReason] = useState('');
+    const [banType, setBanType] = useState('suspended');
+    const [banning, setBanning] = useState(false);
 
     const { data: users = [], isLoading: loading, refetch } = useQuery({
         queryKey: ['users'],
@@ -55,6 +60,26 @@ export default function UsersPage() {
         else { setSortKey(key); setSortAsc(false); }
     };
 
+    const handleBan = async () => {
+        if (!banModal || !banReason) return;
+        setBanning(true);
+        try {
+            await api.post('/users/ban', { user_id: banModal.id, ban_type: banType, reason: banReason });
+            setBanModal(null); setBanReason(''); refetch();
+        } catch (e) { alert('Failed to ban user'); }
+        setBanning(false);
+    };
+
+    const handleUnban = async (userId: string) => {
+        if (!confirm('Unban this user?')) return;
+        try { await api.post(`/users/${userId}/unban`); refetch(); }
+        catch (e) { alert('Failed to unban'); }
+    };
+
+    const handleExport = () => {
+        window.open(`${api.defaults.baseURL}/export/users`, '_blank');
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -64,13 +89,16 @@ export default function UsersPage() {
                         {users.length} users total · {premiumCount} Premium · {users.length - premiumCount} Free
                     </p>
                 </div>
-                <button
-                    onClick={() => refetch()}
-                    className="px-4 py-2 border border-slate-200 rounded-lg flex items-center gap-2 hover:bg-slate-50 text-slate-600"
-                >
-                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                    Refresh
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={handleExport}
+                        className="px-4 py-2 border border-slate-200 rounded-lg flex items-center gap-2 hover:bg-slate-50 text-slate-600 text-sm">
+                        <Download size={16} /> Export CSV
+                    </button>
+                    <button onClick={() => refetch()}
+                        className="px-4 py-2 border border-slate-200 rounded-lg flex items-center gap-2 hover:bg-slate-50 text-slate-600">
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                </div>
             </div>
 
             {/* Quick Stats */}
@@ -157,15 +185,22 @@ export default function UsersPage() {
                                     </div>
                                 </td>
                                 <td className="p-4">
-                                    {user.is_premium ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                            <Crown size={11} /> Premium
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                                            Free Plan
-                                        </span>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                        {user.is_premium ? (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                                <Crown size={11} /> Premium
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                                                Free
+                                            </span>
+                                        )}
+                                        {user.ban_status && user.ban_status !== 'active' && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                                <ShieldBan size={10} /> {user.ban_status}
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="p-4">
                                     <div className="flex items-center gap-1 font-medium text-slate-700">
@@ -177,17 +212,26 @@ export default function UsersPage() {
                                     {new Date(user.created_at || Date.now()).toLocaleDateString('th-TH')}
                                 </td>
                                 <td className="p-4 text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                        <a
-                                            href={`/coins?user=${user.id}`}
-                                            className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors"
-                                            title="จัดการ Coin"
-                                        >
+                                    <div className="flex items-center justify-end gap-1">
+                                        <Link href={`/users/${user.id}`}
+                                            className="p-2 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="View Detail">
+                                            <Eye size={16} />
+                                        </Link>
+                                        <a href={`/coins?user=${user.id}`}
+                                            className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-colors" title="จัดการ Coin">
                                             <Coins size={16} />
                                         </a>
-                                        <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors" title="More">
-                                            <MoreVertical size={16} />
-                                        </button>
+                                        {(!user.ban_status || user.ban_status === 'active') ? (
+                                            <button onClick={() => setBanModal(user)}
+                                                className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors" title="Ban/Suspend">
+                                                <Ban size={16} />
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => handleUnban(user.id)}
+                                                className="p-2 hover:bg-green-50 rounded-lg text-slate-400 hover:text-green-600 transition-colors" title="Unban">
+                                                <UserCheck size={16} />
+                                            </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -199,6 +243,31 @@ export default function UsersPage() {
                     <div className="p-8 text-center text-slate-400">ไม่พบผู้ใช้ที่ตรงกับเงื่อนไข</div>
                 )}
             </div>
+
+            {/* Ban Modal */}
+            {banModal && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4">Ban / Suspend User</h3>
+                        <p className="text-sm text-slate-600 mb-4">{banModal.display_name || banModal.email}</p>
+                        <select value={banType} onChange={(e) => setBanType(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-3">
+                            <option value="suspended">Suspended (ระงับชั่วคราว)</option>
+                            <option value="banned">Banned (แบนถาวร)</option>
+                        </select>
+                        <textarea placeholder="เหตุผล..." value={banReason} onChange={(e) => setBanReason(e.target.value)}
+                            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mb-4" rows={3} />
+                        <div className="flex gap-2 justify-end">
+                            <button onClick={() => { setBanModal(null); setBanReason(''); }}
+                                className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600">Cancel</button>
+                            <button onClick={handleBan} disabled={!banReason || banning}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+                                {banning ? 'Processing...' : 'Confirm Ban'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

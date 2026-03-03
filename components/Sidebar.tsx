@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap, Bell, Coins, Shield, Box } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap, Bell, Coins, Shield, Box, DollarSign, ScrollText, Ticket, ShieldAlert, Image, HeartPulse, PieChart } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { authService, AdminUser } from '../lib/auth';
@@ -8,13 +8,18 @@ import { authService, AdminUser } from '../lib/auth';
 const NAV_ITEMS = [
     { label: 'Overview', icon: LayoutDashboard, href: '/' },
     { label: 'Users', icon: Users, href: '/users' },
+    { label: 'Revenue', icon: DollarSign, href: '/revenue' },
     { label: 'Notifications', icon: Bell, href: '/notifications' },
     { label: 'Coin Management', icon: Coins, href: '/coins' },
-    { label: 'Admins', icon: Shield, href: '/admins' }, // New Link
+    { label: 'Promo Codes', icon: Ticket, href: '/promos' },
+    { label: 'Admins', icon: Shield, href: '/admins' },
+    { label: 'Audit Logs', icon: ScrollText, href: '/audit-logs' },
+    { label: 'Moderation', icon: ShieldAlert, href: '/moderation' },
+    { label: 'Wallpapers', icon: Image, href: '/wallpapers' },
     { label: '3D Assets', icon: Box, href: '/assets' },
-    { label: 'ai-model-use', icon: Zap, href: '/usage' },
-    { label: 'Inspector', icon: Sparkles, href: '/inspector' },
-    // { label: 'Transactions', icon: History, href: '/transactions' },
+    { label: 'AI Model Usage', icon: Zap, href: '/usage' },
+    { label: 'System Health', icon: HeartPulse, href: '/system' },
+    { label: 'Segmentation', icon: PieChart, href: '/segmentation' },
     { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
