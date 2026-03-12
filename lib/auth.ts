@@ -1,8 +1,7 @@
 import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
-
 const TOKEN_KEY = 'admin_token';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.128:8000/api/admin';
 
 export interface AdminUser {
     username: string;
