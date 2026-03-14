@@ -11,9 +11,11 @@ interface LogEntry {
   model: string;
   tokens_in: number;
   tokens_out: number;
+  tokens_think: number;
   total_tokens: number;
   cost_thb: number;
   cost_usd: number;
+  is_image: boolean;
 }
 
 export default function AiLogsPage() {
@@ -61,11 +63,24 @@ export default function AiLogsPage() {
         const modelMatch = logStr.match(/Model: (.*?) \|/);
         const model = modelMatch ? modelMatch[1].trim() : "Unknown";
         
-        // Extract tokens
-        const tokensMatch = logStr.match(/Tokens: (\d+) In, (\d+) Out \(Total (\d+)\)/);
-        const tokens_in = tokensMatch ? parseInt(tokensMatch[1]) : 0;
-        const tokens_out = tokensMatch ? parseInt(tokensMatch[2]) : 0;
-        const total_tokens = tokensMatch ? parseInt(tokensMatch[3]) : 0;
+        // Check if this is an image generation entry
+        const is_image = logStr.includes('Image Generation');
+        
+        // Extract tokens (new format: In, Out, Think)
+        const tokensMatchNew = logStr.match(/Tokens: (\d+) In, (\d+) Out, (\d+) Think \(Total (\d+)\)/);
+        const tokensMatchOld = logStr.match(/Tokens: (\d+) In, (\d+) Out \(Total (\d+)\)/);
+        
+        let tokens_in = 0, tokens_out = 0, tokens_think = 0, total_tokens = 0;
+        if (tokensMatchNew) {
+          tokens_in = parseInt(tokensMatchNew[1]);
+          tokens_out = parseInt(tokensMatchNew[2]);
+          tokens_think = parseInt(tokensMatchNew[3]);
+          total_tokens = parseInt(tokensMatchNew[4]);
+        } else if (tokensMatchOld) {
+          tokens_in = parseInt(tokensMatchOld[1]);
+          tokens_out = parseInt(tokensMatchOld[2]);
+          total_tokens = parseInt(tokensMatchOld[3]);
+        }
         
         // Extract cost
         const costMatch = logStr.match(/Cost: ([\d.]+) THB \(([\d.]+) USD\)/);
@@ -79,9 +94,11 @@ export default function AiLogsPage() {
           model,
           tokens_in,
           tokens_out,
+          tokens_think,
           total_tokens,
           cost_thb,
-          cost_usd
+          cost_usd,
+          is_image
         });
       } catch (e) {
         // If parsing fails, just skip this line for structured view
@@ -183,28 +200,47 @@ export default function AiLogsPage() {
                   <th className="px-6 py-3 font-medium">วัน/เวลา</th>
                   <th className="px-6 py-3 font-medium">ฟีเจอร์</th>
                   <th className="px-6 py-3 font-medium">โมเดล</th>
-                  <th className="px-6 py-3 font-medium text-right">Tokens (In/Out)</th>
+                  <th className="px-6 py-3 font-medium text-right">Tokens (In/Out/Think)</th>
                   <th className="px-6 py-3 font-medium text-right">ต้นทุน (THB)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {logs.map((log, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
+                  <tr key={index} className={`hover:bg-gray-50 ${log.is_image ? 'bg-amber-50' : ''}`}>
                     <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
                       {log.timestamp}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${log.is_image ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
                         {log.feature}
                       </span>
+                      {log.is_image && <span className="ml-1 text-xs text-amber-600">🖼️</span>}
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{log.model}</td>
+                    <td className="px-6 py-4 text-gray-500 text-xs">{log.model}</td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-green-600">{log.tokens_in}</span> / <span className="text-purple-600">{log.tokens_out}</span>
-                      <div className="text-gray-400 mt-1 text-xs">รวม {log.total_tokens}</div>
+                      {log.is_image ? (
+                        <span className="text-amber-600 text-xs">Image (per-image pricing)</span>
+                      ) : (
+                        <>
+                          <span className="text-green-600">{log.tokens_in}</span>
+                          {' / '}
+                          <span className="text-purple-600">{log.tokens_out}</span>
+                          {log.tokens_think > 0 && (
+                            <>
+                              {' / '}
+                              <span className="text-orange-500">{log.tokens_think}</span>
+                            </>
+                          )}
+                          <div className="text-gray-400 mt-1 text-xs">
+                            รวม {log.total_tokens}
+                            {log.tokens_think > 0 && <span className="text-orange-400 ml-1">(Think {log.tokens_think})</span>}
+                          </div>
+                        </>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-gray-900">
                       {log.cost_thb.toFixed(5)} ฿
+                      <div className="text-gray-400 mt-1 text-xs">${log.cost_usd.toFixed(6)}</div>
                     </td>
                   </tr>
                 ))}

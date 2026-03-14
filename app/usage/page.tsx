@@ -197,7 +197,7 @@ export default function UsagePage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-right font-medium text-slate-900">
-                                                ฿{(parseFloat(data.estimated_cost) * 34).toFixed(2)}
+                                                ฿{(data.estimated_cost_thb || 0).toFixed(2)}
                                             </td>
                                         </tr>
                                     ))}
@@ -239,13 +239,13 @@ export default function UsagePage() {
                                         <th className="px-6 py-4">Timestamp</th>
                                         <th className="px-6 py-4">Topic</th>
                                         <th className="px-6 py-4">Model</th>
-                                        <th className="px-6 py-4 text-right">Tokens (In/Out)</th>
+                                        <th className="px-6 py-4 text-right">Tokens (In/Out/Think)</th>
                                         <th className="px-6 py-4 text-right">Cost (THB)</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {logs.map((log: any) => (
-                                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <tr key={log.id} className={`hover:bg-slate-50/50 transition-colors ${log.is_image ? 'bg-amber-50/30' : ''}`}>
                                             <td className="px-6 py-4 text-slate-500">
                                                 <div className="flex items-center gap-2">
                                                     <Clock size={14} />
@@ -254,15 +254,22 @@ export default function UsagePage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-medium capitalize">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${log.is_image ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                                                     {log.topic}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-slate-700">
+                                            <td className="px-6 py-4 text-slate-700 text-xs">
                                                 {log.model.replace('models/', '')}
                                             </td>
                                             <td className="px-6 py-4 text-right text-slate-600 font-mono text-xs">
-                                                {log.tokens.input} / {log.tokens.output}
+                                                {log.is_image ? (
+                                                    <span className="text-amber-600">Image</span>
+                                                ) : (
+                                                    <>
+                                                        {log.tokens.input} / {log.tokens.output}
+                                                        {log.tokens.thinking > 0 && <span className="text-orange-500"> / {log.tokens.thinking}</span>}
+                                                    </>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-right text-slate-900 font-medium">
                                                 ฿{log.cost.thb.toFixed(4)}
