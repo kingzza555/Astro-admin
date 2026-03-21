@@ -2,11 +2,15 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.174:8000/api/admin',
+    baseURL: process.env.NEXT_PUBLIC_API_URL,
     // headers: {
     //     'x-admin-key': process.env.NEXT_PUBLIC_ADMIN_KEY || 'astro-admin-secret-key-2026',
     // },
 });
+
+if (!process.env.NEXT_PUBLIC_API_URL) {
+    console.warn("⚠️ NEXT_PUBLIC_API_URL is not set in environment variables");
+}
 
 console.log("🚀 Admin API Base URL:", api.defaults.baseURL);
 

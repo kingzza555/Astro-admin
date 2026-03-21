@@ -1,7 +1,11 @@
 import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
 const TOKEN_KEY = 'admin_token';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.1.174:8000/api/admin';
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+if (!API_URL) {
+    console.warn("⚠️ NEXT_PUBLIC_API_URL is not set in environment variables");
+}
 
 export interface AdminUser {
     username: string;
@@ -13,6 +17,8 @@ export interface AdminUser {
 export const authService = {
     login: async (username: string, password: string): Promise<boolean> => {
         try {
+            if (!API_URL) throw new Error("API_URL is undefined");
+            
             const formData = new FormData();
             formData.append('username', username);
             formData.append('password', password);
