@@ -1,22 +1,74 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Lock, Key, Save, Loader2, RefreshCw, Eye, EyeOff, AlertTriangle, CheckCircle, Shield } from 'lucide-react';
+import { Settings, Lock, Key, Save, Loader2, RefreshCw, Eye, EyeOff, AlertTriangle, CheckCircle, Shield, Coins, Sparkles, Layers } from 'lucide-react';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
 
-const DEFAULT_CONFIGS = [
-    { key: 'wallpaper_cost', description: 'Coin cost for AI Wallpaper generation', defaultValue: '119' },
-    { key: 'deep_dive_cost', description: 'Coin cost for Deep Dive reading', defaultValue: '3' },
-    { key: 'micro_timing_cost', description: 'Coin cost for Micro Timing reading', defaultValue: '3' },
-    { key: 'celestial_bond_cost', description: 'Coin cost for Celestial Bond reading', defaultValue: '3' },
-    { key: 'new_user_bonus_coins', description: 'Free coins given to new users on signup', defaultValue: '10' },
-    { key: 'maintenance_mode', description: 'Enable maintenance mode (true/false)', defaultValue: 'false' },
+interface ConfigItem {
+    key: string;
+    description: string;
+    defaultValue: string;
+}
+
+interface ConfigGroup {
+    label: string;
+    icon: React.ReactNode;
+    items: ConfigItem[];
+}
+
+const CONFIG_GROUPS: ConfigGroup[] = [
+    {
+        label: 'Tarot Readings',
+        icon: <Sparkles size={18} className="text-purple-500" />,
+        items: [
+            { key: 'tarot_3_card_cost', description: 'Coin cost for 3-Card Tarot reading', defaultValue: '15' },
+            { key: 'tarot_10_card_cost', description: 'Coin cost for 10-Card Celtic Cross reading', defaultValue: '99' },
+        ]
+    },
+    {
+        label: 'Deep Dive (per Timeframe)',
+        icon: <Layers size={18} className="text-blue-500" />,
+        items: [
+            { key: 'deep_dive_daily_cost', description: 'Deep Dive — Daily timeframe', defaultValue: '3' },
+            { key: 'deep_dive_weekly_cost', description: 'Deep Dive — Weekly timeframe', defaultValue: '9' },
+            { key: 'deep_dive_monthly_cost', description: 'Deep Dive — Monthly timeframe', defaultValue: '19' },
+        ]
+    },
+    {
+        label: 'Micro Timing (per Timeframe)',
+        icon: <Layers size={18} className="text-amber-500" />,
+        items: [
+            { key: 'micro_timing_daily_cost', description: 'Micro Timing — Daily timeframe', defaultValue: '3' },
+            { key: 'micro_timing_weekly_cost', description: 'Micro Timing — Weekly timeframe', defaultValue: '9' },
+            { key: 'micro_timing_monthly_cost', description: 'Micro Timing — Monthly timeframe', defaultValue: '19' },
+        ]
+    },
+    {
+        label: 'Other Features',
+        icon: <Coins size={18} className="text-emerald-500" />,
+        items: [
+            { key: 'wallpaper_cost', description: 'Coin cost for AI Wallpaper generation', defaultValue: '119' },
+            { key: 'celestial_bond_cost', description: 'Coin cost for Celestial Bond reading', defaultValue: '3' },
+            { key: 'new_user_bonus_coins', description: 'Free coins given to new users on signup', defaultValue: '10' },
+        ]
+    },
+    {
+        label: 'System',
+        icon: <Settings size={18} className="text-slate-500" />,
+        items: [
+            { key: 'maintenance_mode', description: 'Enable maintenance mode (true/false)', defaultValue: 'false' },
+        ]
+    },
 ];
 
 export default function SettingsPage() {
     const queryClient = useQueryClient();
-    const user = authService.getUser();
+    const [user, setUser] = useState<any>(null);
+
+    useEffect(() => {
+        setUser(authService.getUser());
+    }, []);
 
     // --- Change Password State ---
     const [currentPassword, setCurrentPassword] = useState('');
@@ -252,67 +304,77 @@ export default function SettingsPage() {
                         <RefreshCw className="animate-spin text-slate-300" size={24} />
                     </div>
                 ) : (
-                    <div className="divide-y divide-slate-100">
-                        {DEFAULT_CONFIGS.map((cfg) => {
-                            const currentValue = getConfigValue(cfg.key, cfg.defaultValue);
-                            const isEditing = editingKey === cfg.key;
-
-                            return (
-                                <div key={cfg.key} className="py-4 flex items-center justify-between gap-4">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-slate-900 font-mono">{cfg.key}</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">{cfg.description}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {isEditing ? (
-                                            <>
-                                                <input
-                                                    type="text"
-                                                    value={editValue}
-                                                    onChange={(e) => setEditValue(e.target.value)}
-                                                    className="w-32 px-2 py-1 border border-indigo-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500"
-                                                    autoFocus
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleSaveConfig(cfg.key, cfg.description);
-                                                        if (e.key === 'Escape') { setEditingKey(null); setEditValue(''); }
-                                                    }}
-                                                />
-                                                <button
-                                                    onClick={() => handleSaveConfig(cfg.key, cfg.description)}
-                                                    disabled={updateConfigMutation.isPending}
-                                                    className="p-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                                                >
-                                                    {updateConfigMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                                                </button>
-                                                <button
-                                                    onClick={() => { setEditingKey(null); setEditValue(''); }}
-                                                    className="p-1.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <span className={`px-3 py-1 rounded-md text-sm font-mono ${
-                                                    configData?.config?.[cfg.key]
-                                                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                                        : 'bg-slate-50 text-slate-500 border border-slate-200'
-                                                }`}>
-                                                    {currentValue}
-                                                    {!configData?.config?.[cfg.key] && <span className="text-xs ml-1 text-slate-400">(default)</span>}
-                                                </span>
-                                                <button
-                                                    onClick={() => { setEditingKey(cfg.key); setEditValue(currentValue); }}
-                                                    className="px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200"
-                                                >
-                                                    Edit
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
+                    <div className="space-y-6">
+                        {CONFIG_GROUPS.map((group) => (
+                            <div key={group.label}>
+                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+                                    {group.icon}
+                                    <h3 className="text-sm font-semibold text-slate-700">{group.label}</h3>
                                 </div>
-                            );
-                        })}
+                                <div className="divide-y divide-slate-50">
+                                    {group.items.map((cfg) => {
+                                        const currentValue = getConfigValue(cfg.key, cfg.defaultValue);
+                                        const isEditing = editingKey === cfg.key;
+
+                                        return (
+                                            <div key={cfg.key} className="py-3 flex items-center justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium text-slate-900 font-mono">{cfg.key}</p>
+                                                    <p className="text-xs text-slate-400 mt-0.5">{cfg.description}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {isEditing ? (
+                                                        <>
+                                                            <input
+                                                                type="text"
+                                                                value={editValue}
+                                                                onChange={(e) => setEditValue(e.target.value)}
+                                                                className="w-32 px-2 py-1 border border-indigo-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500"
+                                                                autoFocus
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') handleSaveConfig(cfg.key, cfg.description);
+                                                                    if (e.key === 'Escape') { setEditingKey(null); setEditValue(''); }
+                                                                }}
+                                                            />
+                                                            <button
+                                                                onClick={() => handleSaveConfig(cfg.key, cfg.description)}
+                                                                disabled={updateConfigMutation.isPending}
+                                                                className="p-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                                            >
+                                                                {updateConfigMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setEditingKey(null); setEditValue(''); }}
+                                                                className="p-1.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className={`px-3 py-1 rounded-md text-sm font-mono ${
+                                                                configData?.config?.[cfg.key]
+                                                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                                                    : 'bg-slate-50 text-slate-500 border border-slate-200'
+                                                            }`}>
+                                                                {currentValue}
+                                                                {!configData?.config?.[cfg.key] && <span className="text-xs ml-1 text-slate-400">(default)</span>}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => { setEditingKey(cfg.key); setEditValue(currentValue); }}
+                                                                className="px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>

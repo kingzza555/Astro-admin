@@ -1,22 +1,48 @@
 "use client";
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Image as ImageIcon, RefreshCw, Trash2, Search, Users, BarChart3, ChevronLeft, ChevronRight, X, Eye } from 'lucide-react';
+import { Image as ImageIcon, RefreshCw, Trash2, Search, Users, BarChart3, ChevronLeft, ChevronRight, X, Eye, Filter } from 'lucide-react';
 import api from '@/lib/api';
+
+const CATEGORIES = [
+    { value: 'all', label: 'ทั้งหมด', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+    { value: 'love', label: 'ความรัก', color: 'bg-pink-50 text-pink-700 border-pink-200' },
+    { value: 'wealth', label: 'การเงิน', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { value: 'career', label: 'การงาน', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { value: 'health', label: 'สุขภาพ', color: 'bg-green-50 text-green-700 border-green-200' },
+];
+
+const CATEGORY_BADGE: Record<string, string> = {
+    love: 'bg-pink-100 text-pink-700',
+    wealth: 'bg-amber-100 text-amber-700',
+    career: 'bg-blue-100 text-blue-700',
+    health: 'bg-green-100 text-green-700',
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+    love: 'ความรัก',
+    wealth: 'การเงิน',
+    career: 'การงาน',
+    health: 'สุขภาพ',
+};
 
 export default function WallpapersPage() {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'gallery' | 'stats'>('gallery');
     const [filterUser, setFilterUser] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [category, setCategory] = useState('all');
     const [page, setPage] = useState(0);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const LIMIT = 24;
 
     const { data: galleryData, isLoading, refetch } = useQuery({
-        queryKey: ['wallpapers', page, filterUser],
+        queryKey: ['wallpapers', page, filterUser, category, searchQuery],
         queryFn: async () => {
             const params = new URLSearchParams({ limit: String(LIMIT), offset: String(page * LIMIT) });
             if (filterUser) params.set('user_id', filterUser);
+            if (category !== 'all') params.set('category', category);
+            if (searchQuery.trim()) params.set('search', searchQuery.trim());
             const res = await api.get(`/wallpapers/search?${params}`);
             return res.data;
         }
@@ -39,6 +65,20 @@ export default function WallpapersPage() {
     const handleDelete = (id: string) => {
         if (!confirm('ลบ wallpaper นี้? การกระทำนี้ย้อนกลับไม่ได้')) return;
         deleteMutation.mutate(id);
+    };
+
+    const clearFilters = () => {
+        setFilterUser('');
+        setSearchQuery('');
+        setCategory('all');
+        setPage(0);
+    };
+
+    const hasActiveFilters = filterUser || searchQuery || category !== 'all';
+
+    const getCategoryFromSubtype = (subtype: string): string => {
+        if (!subtype) return '';
+        return subtype.replace('manual_', '');
     };
 
     return (
@@ -77,25 +117,45 @@ export default function WallpapersPage() {
             {/* ====== TAB: GALLERY ====== */}
             {activeTab === 'gallery' && (
                 <div className="space-y-4">
-                    {/* Search */}
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-end">
-                        <div className="flex-1 min-w-[250px]">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
-                            <div className="relative">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input type="text" placeholder="User UUID..." value={filterUser}
-                                    onChange={e => { setFilterUser(e.target.value); setPage(0); }}
-                                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500" />
+                    {/* Filters */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                        <div className="flex flex-wrap gap-3 items-end">
+                            <div className="flex-1 min-w-[220px]">
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Search by Name / Email</label>
+                                <div className="relative">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input type="text" placeholder="ชื่อผู้ใช้ หรือ email..." value={searchQuery}
+                                        onChange={e => { setSearchQuery(e.target.value); setFilterUser(''); setPage(0); }}
+                                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500" />
+                                </div>
                             </div>
+                            <div className="min-w-[200px]">
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
+                                <input type="text" placeholder="User UUID..." value={filterUser}
+                                    onChange={e => { setFilterUser(e.target.value); setSearchQuery(''); setPage(0); }}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono" />
+                            </div>
+                            {hasActiveFilters && (
+                                <button onClick={clearFilters}
+                                    className="px-3 py-2 text-sm text-red-500 hover:text-red-700 border border-red-200 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1">
+                                    <X size={14} /> Clear
+                                </button>
+                            )}
                         </div>
-                        {filterUser && (
-                            <button onClick={() => { setFilterUser(''); setPage(0); }}
-                                className="px-3 py-2 text-sm text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg">
-                                Clear
-                            </button>
-                        )}
-                        <div className="text-xs text-slate-400 py-2">
-                            {pagination.total} wallpapers found
+
+                        {/* Category Chips */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Filter size={14} className="text-slate-400" />
+                            {CATEGORIES.map(cat => (
+                                <button key={cat.value}
+                                    onClick={() => { setCategory(cat.value); setPage(0); }}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                                        category === cat.value ? cat.color + ' ring-2 ring-offset-1 ring-pink-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                    }`}>
+                                    {cat.label}
+                                </button>
+                            ))}
+                            <span className="text-xs text-slate-400 ml-2">{pagination.total} wallpapers found</span>
                         </div>
                     </div>
 
@@ -105,13 +165,18 @@ export default function WallpapersPage() {
                         <div className="text-center py-20">
                             <ImageIcon size={48} className="mx-auto mb-4 text-slate-300" />
                             <p className="text-base font-medium text-slate-600">No Wallpapers Found</p>
-                            <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">เมื่อ user สร้าง AI Wallpaper ในแอพ ภาพจะแสดงที่นี่เพื่อดูและตรวจสอบ</p>
+                            <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
+                                {hasActiveFilters ? 'ลองเปลี่ยน filter หรือกด Clear เพื่อดูทั้งหมด' : 'เมื่อ user สร้าง AI Wallpaper ในแอพ ภาพจะแสดงที่นี่เพื่อดูและตรวจสอบ'}
+                            </p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {wallpapers.map((w: any) => {
                                 const analysis = w.full_analysis || {};
                                 const imageUrl = analysis.image_url || analysis.imageUrl;
+                                const cat = getCategoryFromSubtype(w.subtype);
+                                const badgeClass = CATEGORY_BADGE[cat] || 'bg-slate-100 text-slate-600';
+                                const catLabel = CATEGORY_LABEL[cat] || cat;
                                 return (
                                     <div key={w.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden group relative">
                                         {imageUrl ? (
@@ -120,16 +185,26 @@ export default function WallpapersPage() {
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                                                     <Eye size={24} className="text-white drop-shadow-lg" />
                                                 </div>
+                                                {catLabel && (
+                                                    <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass}`}>
+                                                        {w.subtype?.startsWith('manual_') ? 'Manual · ' : ''}{catLabel}
+                                                    </span>
+                                                )}
                                             </div>
                                         ) : (
-                                            <div className="w-full h-44 bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center">
+                                            <div className="w-full h-44 bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center relative">
                                                 <ImageIcon size={28} className="text-pink-200" />
+                                                {catLabel && (
+                                                    <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${badgeClass}`}>
+                                                        {catLabel}
+                                                    </span>
+                                                )}
                                             </div>
                                         )}
                                         <div className="p-3">
                                             <div className="flex items-center justify-between">
-                                                <button onClick={() => { setFilterUser(w.user_id); setPage(0); }}
-                                                    className="text-xs text-indigo-600 hover:underline font-mono truncate max-w-[160px]" title={w.user_id}>
+                                                <button onClick={() => { setFilterUser(w.user_id); setSearchQuery(''); setPage(0); }}
+                                                    className="text-xs text-indigo-600 hover:underline truncate max-w-[160px]" title={`${w.user_name}\n${w.user_email || w.user_id}`}>
                                                     {w.user_name || w.user_id?.slice(0, 10)}
                                                 </button>
                                                 <button onClick={() => handleDelete(w.id)} disabled={deleteMutation.isPending}
@@ -137,7 +212,10 @@ export default function WallpapersPage() {
                                                     <Trash2 size={14} />
                                                 </button>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-1">{new Date(w.created_at).toLocaleString('th-TH')}</p>
+                                            {w.user_email && (
+                                                <p className="text-[10px] text-slate-400 truncate">{w.user_email}</p>
+                                            )}
+                                            <p className="text-[10px] text-slate-400 mt-0.5">{new Date(w.created_at).toLocaleString('th-TH')}</p>
                                             {analysis.prompt && (
                                                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{analysis.prompt}</p>
                                             )}
