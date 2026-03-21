@@ -40,9 +40,16 @@ export default function ModerationPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {isLoading ? (
-                            <tr><td colSpan={4} className="text-center py-10 text-slate-400">Loading...</td></tr>
+                            <tr><td colSpan={4} className="text-center py-10 text-slate-400">
+                                <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
+                                Loading chat logs...
+                            </td></tr>
                         ) : (logs || []).length === 0 ? (
-                            <tr><td colSpan={4} className="text-center py-10 text-slate-400">No chat messages found</td></tr>
+                            <tr><td colSpan={4} className="text-center py-16 text-slate-400">
+                                <ShieldAlert className="mx-auto h-10 w-10 mb-3 text-slate-300" />
+                                <p className="text-base font-medium text-slate-600">No Chat Messages Yet</p>
+                                <p className="text-sm mt-1 max-w-sm mx-auto">เมื่อ user ส่งข้อความ follow-up chat ในแอพ ข้อความจะปรากฏที่นี่เพื่อตรวจสอบเนื้อหา</p>
+                            </td></tr>
                         ) : (logs || []).map((log: any) => (
                             <tr key={log.id} className="hover:bg-slate-50/50">
                                 <td className="px-6 py-3 text-xs text-slate-500 whitespace-nowrap">

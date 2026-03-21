@@ -28,6 +28,7 @@ export default function AuditLogsPage() {
         'export_users': 'bg-blue-100 text-blue-700',
         'export_transactions': 'bg-blue-100 text-blue-700',
         'export_readings': 'bg-blue-100 text-blue-700',
+        'update_app_config': 'bg-indigo-100 text-indigo-700',
     };
 
     return (
@@ -56,9 +57,16 @@ export default function AuditLogsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                         {isLoading ? (
-                            <tr><td colSpan={6} className="text-center py-10 text-slate-400">Loading...</td></tr>
+                            <tr><td colSpan={6} className="text-center py-10 text-slate-400">
+                                <RefreshCw className="mx-auto h-6 w-6 animate-spin mb-2" />
+                                Loading audit logs...
+                            </td></tr>
                         ) : (logs || []).length === 0 ? (
-                            <tr><td colSpan={6} className="text-center py-10 text-slate-400">No audit logs yet</td></tr>
+                            <tr><td colSpan={6} className="text-center py-16 text-slate-400">
+                                <ScrollText className="mx-auto h-10 w-10 mb-3 text-slate-300" />
+                                <p className="text-base font-medium text-slate-600">No Audit Logs Yet</p>
+                                <p className="text-sm mt-1 max-w-sm mx-auto">เมื่อ admin ทำการ ban user, เพิ่มเหรียญ, export ข้อมูล หรือแก้ไข config ระบบจะบันทึก log ที่นี่</p>
+                            </td></tr>
                         ) : (logs || []).map((log: any) => (
                             <tr key={log.id} className="hover:bg-slate-50/50">
                                 <td className="px-6 py-3 text-xs text-slate-500 whitespace-nowrap">

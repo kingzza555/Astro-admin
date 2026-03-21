@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap, Bell, Coins, Shield, Box, DollarSign, ScrollText, Ticket, ShieldAlert, Image, HeartPulse, PieChart, FileText, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, History, Settings, Sparkles, LogOut, Zap, Bell, Coins, Shield, Box, DollarSign, ScrollText, Ticket, ShieldAlert, Image, HeartPulse, PieChart, FileText, CalendarDays, Crown, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { authService, AdminUser } from '../lib/auth';
@@ -8,7 +8,11 @@ import { authService, AdminUser } from '../lib/auth';
 const NAV_ITEMS = [
     { label: 'Overview', icon: LayoutDashboard, href: '/' },
     { label: 'Users', icon: Users, href: '/users' },
+    { label: 'Segmentation', icon: PieChart, href: '/segmentation' },
+    { label: 'Premium', icon: Crown, href: '/premium' },
     { label: 'Revenue', icon: DollarSign, href: '/revenue' },
+    { label: 'Transactions', icon: History, href: '/transactions' },
+    { label: 'Readings', icon: Activity, href: '/readings' },
     { label: 'Notifications', icon: Bell, href: '/notifications' },
     { label: 'Coin Management', icon: Coins, href: '/coins' },
     { label: 'Promo Codes', icon: Ticket, href: '/promos' },
@@ -16,12 +20,9 @@ const NAV_ITEMS = [
     { label: 'Audit Logs', icon: ScrollText, href: '/audit-logs' },
     { label: 'Moderation', icon: ShieldAlert, href: '/moderation' },
     { label: 'Wallpapers', icon: Image, href: '/wallpapers' },
-    { label: '3D Assets', icon: Box, href: '/assets' },
     { label: 'AI Model Usage', icon: Zap, href: '/usage' },
-    { label: 'AI Cost Logs', icon: FileText, href: '/ai-logs' },
     { label: 'Forecast Pool', icon: CalendarDays, href: '/forecast-pool' },
     { label: 'System Health', icon: HeartPulse, href: '/system' },
-    { label: 'Segmentation', icon: PieChart, href: '/segmentation' },
     { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 

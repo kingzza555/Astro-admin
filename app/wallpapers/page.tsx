@@ -1,58 +1,243 @@
 "use client";
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Image as ImageIcon, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Image as ImageIcon, RefreshCw, Trash2, Search, Users, BarChart3, ChevronLeft, ChevronRight, X, Eye } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function WallpapersPage() {
-    const { data: wallpapers, isLoading, refetch } = useQuery({
-        queryKey: ['wallpapers'],
-        queryFn: async () => { const res = await api.get('/wallpapers?limit=50'); return res.data; }
+    const queryClient = useQueryClient();
+    const [activeTab, setActiveTab] = useState<'gallery' | 'stats'>('gallery');
+    const [filterUser, setFilterUser] = useState('');
+    const [page, setPage] = useState(0);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const LIMIT = 24;
+
+    const { data: galleryData, isLoading, refetch } = useQuery({
+        queryKey: ['wallpapers', page, filterUser],
+        queryFn: async () => {
+            const params = new URLSearchParams({ limit: String(LIMIT), offset: String(page * LIMIT) });
+            if (filterUser) params.set('user_id', filterUser);
+            const res = await api.get(`/wallpapers/search?${params}`);
+            return res.data;
+        }
     });
+
+    const { data: stats } = useQuery({
+        queryKey: ['wallpaperStats'],
+        queryFn: async () => { const res = await api.get('/wallpapers/stats'); return res.data; }
+    });
+
+    const wallpapers = galleryData?.data || [];
+    const pagination = galleryData?.pagination || { total: 0 };
+    const totalPages = Math.ceil(pagination.total / LIMIT);
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => { await api.delete(`/wallpapers/${id}`); },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wallpapers'] }); queryClient.invalidateQueries({ queryKey: ['wallpaperStats'] }); }
+    });
+
+    const handleDelete = (id: string) => {
+        if (!confirm('ลบ wallpaper นี้? การกระทำนี้ย้อนกลับไม่ได้')) return;
+        deleteMutation.mutate(id);
+    };
 
     return (
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-200 pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900">Wallpaper Gallery</h1>
-                    <p className="text-slate-500 mt-1">View all AI-generated wallpapers by users</p>
+                    <h1 className="text-3xl font-bold text-slate-900">Wallpaper Management</h1>
+                    <p className="text-slate-500 mt-1">ดู, ค้นหา, และจัดการ AI Wallpaper ทั้งหมด</p>
                 </div>
-                <button onClick={() => refetch()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
-                    <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+                <div className="flex items-center gap-3">
+                    {stats && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-50 border border-pink-100 rounded-lg">
+                            <ImageIcon size={14} className="text-pink-500" />
+                            <span className="text-sm font-semibold text-pink-700">{stats.total_wallpapers}</span>
+                            <span className="text-xs text-pink-500">total</span>
+                        </div>
+                    )}
+                    <button onClick={() => refetch()} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors rounded-lg hover:bg-slate-50">
+                        <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1.5 w-fit">
+                <button onClick={() => setActiveTab('gallery')}
+                    className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'gallery' ? 'bg-white shadow text-pink-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <ImageIcon size={16} /> Gallery
+                </button>
+                <button onClick={() => setActiveTab('stats')}
+                    className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'stats' ? 'bg-white shadow text-pink-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <BarChart3 size={16} /> Stats
                 </button>
             </div>
 
-            {isLoading ? (
-                <div className="flex justify-center py-20"><RefreshCw className="animate-spin text-slate-300" size={32} /></div>
-            ) : (wallpapers || []).length === 0 ? (
-                <div className="text-center py-20 text-slate-400">
-                    <ImageIcon size={48} className="mx-auto mb-4 text-slate-300" />
-                    <p>No wallpapers generated yet</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {(wallpapers || []).map((w: any) => {
-                        const analysis = w.full_analysis || {};
-                        const imageUrl = analysis.image_url || analysis.imageUrl;
-                        return (
-                            <div key={w.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                {imageUrl ? (
-                                    <img src={imageUrl} alt="Wallpaper" className="w-full h-48 object-cover" />
-                                ) : (
-                                    <div className="w-full h-48 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
-                                        <ImageIcon size={32} className="text-indigo-300" />
-                                    </div>
-                                )}
-                                <div className="p-4">
-                                    <p className="text-xs text-slate-400">{new Date(w.created_at).toLocaleString('th-TH')}</p>
-                                    <p className="text-xs font-mono text-slate-500 mt-1">User: {w.user_id?.slice(0, 12)}...</p>
-                                    {analysis.prompt && (
-                                        <p className="text-sm text-slate-600 mt-2 line-clamp-2">{analysis.prompt}</p>
-                                    )}
-                                </div>
+            {/* ====== TAB: GALLERY ====== */}
+            {activeTab === 'gallery' && (
+                <div className="space-y-4">
+                    {/* Search */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-end">
+                        <div className="flex-1 min-w-[250px]">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input type="text" placeholder="User UUID..." value={filterUser}
+                                    onChange={e => { setFilterUser(e.target.value); setPage(0); }}
+                                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500" />
                             </div>
-                        );
-                    })}
+                        </div>
+                        {filterUser && (
+                            <button onClick={() => { setFilterUser(''); setPage(0); }}
+                                className="px-3 py-2 text-sm text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg">
+                                Clear
+                            </button>
+                        )}
+                        <div className="text-xs text-slate-400 py-2">
+                            {pagination.total} wallpapers found
+                        </div>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="flex justify-center py-20"><RefreshCw className="animate-spin text-slate-300" size={32} /></div>
+                    ) : wallpapers.length === 0 ? (
+                        <div className="text-center py-20">
+                            <ImageIcon size={48} className="mx-auto mb-4 text-slate-300" />
+                            <p className="text-base font-medium text-slate-600">No Wallpapers Found</p>
+                            <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">เมื่อ user สร้าง AI Wallpaper ในแอพ ภาพจะแสดงที่นี่เพื่อดูและตรวจสอบ</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {wallpapers.map((w: any) => {
+                                const analysis = w.full_analysis || {};
+                                const imageUrl = analysis.image_url || analysis.imageUrl;
+                                return (
+                                    <div key={w.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden group relative">
+                                        {imageUrl ? (
+                                            <div className="relative cursor-pointer" onClick={() => setSelectedImage(imageUrl)}>
+                                                <img src={imageUrl} alt="Wallpaper" className="w-full h-44 object-cover" />
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                    <Eye size={24} className="text-white drop-shadow-lg" />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="w-full h-44 bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center">
+                                                <ImageIcon size={28} className="text-pink-200" />
+                                            </div>
+                                        )}
+                                        <div className="p-3">
+                                            <div className="flex items-center justify-between">
+                                                <button onClick={() => { setFilterUser(w.user_id); setPage(0); }}
+                                                    className="text-xs text-indigo-600 hover:underline font-mono truncate max-w-[160px]" title={w.user_id}>
+                                                    {w.user_name || w.user_id?.slice(0, 10)}
+                                                </button>
+                                                <button onClick={() => handleDelete(w.id)} disabled={deleteMutation.isPending}
+                                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded" title="ลบ wallpaper">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">{new Date(w.created_at).toLocaleString('th-TH')}</p>
+                                            {analysis.prompt && (
+                                                <p className="text-xs text-slate-500 mt-1 line-clamp-2">{analysis.prompt}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200">
+                            <span className="text-xs text-slate-500">
+                                {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, pagination.total)} of {pagination.total}
+                            </span>
+                            <div className="flex gap-1">
+                                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">
+                                    <ChevronLeft size={16} />
+                                </button>
+                                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ====== TAB: STATS ====== */}
+            {activeTab === 'stats' && stats && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2.5 bg-pink-100 rounded-xl"><ImageIcon size={20} className="text-pink-600" /></div>
+                            <div>
+                                <p className="text-sm text-slate-500">Total Wallpapers</p>
+                                <p className="text-2xl font-bold text-slate-900">{stats.total_wallpapers}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2.5 bg-indigo-100 rounded-xl"><Users size={20} className="text-indigo-600" /></div>
+                            <div>
+                                <p className="text-sm text-slate-500">Unique Users</p>
+                                <p className="text-2xl font-bold text-slate-900">{stats.unique_users}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2.5 bg-amber-100 rounded-xl"><BarChart3 size={20} className="text-amber-600" /></div>
+                            <div>
+                                <p className="text-sm text-slate-500">Avg per User</p>
+                                <p className="text-2xl font-bold text-slate-900">{stats.unique_users > 0 ? (stats.total_wallpapers / stats.unique_users).toFixed(1) : 0}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                            <Users size={18} className="text-indigo-500" /> Top Wallpaper Creators
+                        </h2>
+                        {(stats.top_users || []).length === 0 ? (
+                            <p className="text-slate-400 text-sm text-center py-6">ยังไม่มีข้อมูล</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {stats.top_users.map((u: any, i: number) => {
+                                    const max = stats.top_users[0]?.count || 1;
+                                    const percent = (u.count / max) * 100;
+                                    return (
+                                        <div key={u.user_id} className="flex items-center gap-3">
+                                            <span className="text-xs font-bold text-slate-400 w-6 text-right">#{i + 1}</span>
+                                            <button onClick={() => { setFilterUser(u.user_id); setActiveTab('gallery'); setPage(0); }}
+                                                className="text-sm text-indigo-600 hover:underline min-w-[120px] truncate text-left" title={u.user_id}>
+                                                {u.user_name}
+                                            </button>
+                                            <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                                <div className="h-full bg-pink-500 rounded-full transition-all" style={{ width: `${percent}%` }} />
+                                            </div>
+                                            <span className="text-sm font-semibold text-slate-700 min-w-[40px] text-right">{u.count}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ====== LIGHTBOX ====== */}
+            {selectedImage && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
+                    <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white">
+                        <X size={24} />
+                    </button>
+                    <img src={selectedImage} alt="Wallpaper Full" className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
                 </div>
             )}
         </div>

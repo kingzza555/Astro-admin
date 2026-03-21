@@ -15,6 +15,7 @@ import api from '@/lib/api';
 import Link from 'next/link';
 import ActivityTable from '@/components/ActivityTable';
 import StatCard from '@/components/StatCard';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('7d');
@@ -71,10 +72,29 @@ export default function Dashboard() {
   const usageStats = usageMap;
   const isLoading = statsLoading || usageLoading || activitiesLoading;
 
+  // 4. Chart Data Query
+  const { data: chartData, refetch: refetchCharts } = useQuery({
+    queryKey: ['chartData'],
+    queryFn: async () => {
+      const res = await api.get('/stats/charts?days=7');
+      return res.data?.data || [];
+    }
+  });
+
+  // 5. Retention Stats
+  const { data: retention } = useQuery({
+    queryKey: ['retention'],
+    queryFn: async () => {
+      const res = await api.get('/stats/retention');
+      return res.data;
+    }
+  });
+
   const handleRefresh = () => {
     refetchStats();
     refetchUsage();
     refetchActivities();
+    refetchCharts();
   };
 
   const loadMoreActivities = async () => {
@@ -158,6 +178,75 @@ export default function Dashboard() {
           href="/coins"
         />
       </div>
+
+      {/* Charts Section */}
+      {chartData && chartData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Readings / Users per Day */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Activity size={16} className="text-indigo-500" /> Readings & New Users (7 Days)
+            </h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="readingsFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="usersFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="readings" name="Readings" stroke="#6366f1" fill="url(#readingsFill)" strokeWidth={2} />
+                <Area type="monotone" dataKey="new_users" name="New Users" stroke="#10b981" fill="url(#usersFill)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Coin Flow */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+              <Coins size={16} className="text-amber-500" /> Coin Flow (7 Days)
+            </h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="coin_topup" name="Topup" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="coin_spend" name="Spend" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Retention Stats */}
+      {retention && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+            <Users size={16} className="text-emerald-500" /> User Retention
+          </h2>
+          <div className="grid grid-cols-3 gap-4">
+            {[{ label: 'Day 1', data: retention.day_1, color: 'emerald' }, { label: 'Day 7', data: retention.day_7, color: 'blue' }, { label: 'Day 30', data: retention.day_30, color: 'purple' }].map(({ label, data, color }) => (
+              <div key={label} className="text-center">
+                <p className="text-xs text-slate-500 mb-1">{label} Retention</p>
+                <p className={`text-3xl font-bold text-${color}-600`}>{data?.rate || 0}%</p>
+                <p className="text-[10px] text-slate-400 mt-1">{data?.retained || 0} / {data?.cohort_size || 0} users</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">

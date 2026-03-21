@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, Send, Calendar, Clock, Trash2, History, Megaphone, Timer, RefreshCw, AlertCircle, CheckCircle, Users, Sparkles, Smartphone, Zap } from 'lucide-react';
+import { Bell, Send, Calendar, Clock, Trash2, History, Megaphone, Timer, RefreshCw, AlertCircle, CheckCircle, Users, Sparkles, Smartphone, Zap, BarChart3, TrendingUp, Eye } from 'lucide-react';
 import api from '@/lib/api';
 
 interface BroadcastItem {
@@ -32,7 +32,11 @@ interface SendResult {
 }
 
 export default function NotificationsPage() {
-    const [activeTab, setActiveTab] = useState<'broadcast' | 'teaser' | 'scheduled'>('broadcast');
+    const [activeTab, setActiveTab] = useState<'broadcast' | 'teaser' | 'scheduled' | 'analytics'>('broadcast');
+
+    // Analytics
+    const [analytics, setAnalytics] = useState<any>(null);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
     // Stats
     const [totalDevices, setTotalDevices] = useState<number | null>(null);
@@ -98,6 +102,17 @@ export default function NotificationsPage() {
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    // Fetch analytics when tab is opened
+    useEffect(() => {
+        if (activeTab === 'analytics' && !analytics) {
+            setAnalyticsLoading(true);
+            api.get('/notifications/analytics')
+                .then(res => setAnalytics(res.data))
+                .catch(() => setAnalytics({ error: true }))
+                .finally(() => setAnalyticsLoading(false));
+        }
+    }, [activeTab, analytics]);
 
     // === BROADCAST ===
     const handleSendBroadcast = async () => {
@@ -284,6 +299,12 @@ export default function NotificationsPage() {
                     {pendingCount > 0 && (
                         <span className="bg-indigo-600 text-white text-xs rounded-full px-1.5 py-0.5">{pendingCount}</span>
                     )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('analytics')}
+                    className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'analytics' ? 'bg-white shadow text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    <BarChart3 size={16} /> Analytics
                 </button>
             </div>
 
@@ -553,6 +574,94 @@ export default function NotificationsPage() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ====== TAB: ANALYTICS ====== */}
+            {activeTab === 'analytics' && (
+                <div className="space-y-6">
+                    {analyticsLoading ? (
+                        <div className="flex justify-center py-20"><RefreshCw className="animate-spin text-slate-300" size={32} /></div>
+                    ) : analytics?.error ? (
+                        <div className="text-center py-20 text-slate-400">Failed to load analytics</div>
+                    ) : analytics ? (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-indigo-100 rounded-xl"><Smartphone size={20} className="text-indigo-600" /></div>
+                                        <div>
+                                            <p className="text-xs text-slate-500">Registered Devices</p>
+                                            <p className="text-2xl font-bold text-slate-900">{analytics.total_devices?.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-blue-100 rounded-xl"><Bell size={20} className="text-blue-600" /></div>
+                                        <div>
+                                            <p className="text-xs text-slate-500">Total Notifications</p>
+                                            <p className="text-2xl font-bold text-slate-900">{analytics.total_notifications?.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-emerald-100 rounded-xl"><Eye size={20} className="text-emerald-600" /></div>
+                                        <div>
+                                            <p className="text-xs text-slate-500">Open Rate</p>
+                                            <p className="text-2xl font-bold text-emerald-600">{analytics.open_rate}%</p>
+                                            <p className="text-[10px] text-slate-400">{analytics.read_count} read / {analytics.total_notifications} total</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-amber-100 rounded-xl"><TrendingUp size={20} className="text-amber-600" /></div>
+                                        <div>
+                                            <p className="text-xs text-slate-500">Last 7 Days</p>
+                                            <p className="text-2xl font-bold text-slate-900">{analytics.last_7_days}</p>
+                                            <p className="text-[10px] text-slate-400">notifications sent</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Scheduled Stats */}
+                            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                                <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Timer size={18} className="text-indigo-500" /> Scheduled Notifications
+                                </h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-slate-50 rounded-lg p-4 text-center">
+                                        <p className="text-2xl font-bold text-slate-900">{analytics.scheduled?.total || 0}</p>
+                                        <p className="text-xs text-slate-500 mt-1">Total Scheduled</p>
+                                    </div>
+                                    <div className="bg-emerald-50 rounded-lg p-4 text-center">
+                                        <p className="text-2xl font-bold text-emerald-700">{analytics.scheduled?.sent || 0}</p>
+                                        <p className="text-xs text-emerald-600 mt-1">Sent</p>
+                                    </div>
+                                    <div className="bg-amber-50 rounded-lg p-4 text-center">
+                                        <p className="text-2xl font-bold text-amber-700">{analytics.scheduled?.pending || 0}</p>
+                                        <p className="text-xs text-amber-600 mt-1">Pending</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Note */}
+                            {analytics.note && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 flex items-start gap-2">
+                                    <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                                    <span>{analytics.note}</span>
+                                </div>
+                            )}
+
+                            <button onClick={() => { setAnalytics(null); }}
+                                className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                                <RefreshCw size={14} /> Refresh Analytics
+                            </button>
+                        </>
+                    ) : null}
                 </div>
             )}
 
