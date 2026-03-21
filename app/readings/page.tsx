@@ -1,17 +1,16 @@
 "use client";
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Activity, Sparkles, BookOpen, Calendar, RefreshCw, Search, Eye, X, ChevronLeft, ChevronRight, User, Clock, Coins } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { Activity, Sparkles, BookOpen, Calendar, RefreshCw, Search, Eye, X, User, Clock, Coins, TrendingUp, Hash, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
-import StatCard from '@/components/StatCard';
 
 export default function ReadingsPage() {
     const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
-    const [page, setPage] = useState(0);
     const [filterUser, setFilterUser] = useState('');
     const [filterTopic, setFilterTopic] = useState('');
     const [selectedReading, setSelectedReading] = useState<any>(null);
-    const LIMIT = 20;
+    const LIMIT = 30;
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
     const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
         queryKey: ['readingStats'],
@@ -21,38 +20,90 @@ export default function ReadingsPage() {
         }
     });
 
-    const { data: historyData, isLoading: historyLoading, refetch: refetchHistory } = useQuery({
-        queryKey: ['readingHistory', page, filterUser, filterTopic],
-        queryFn: async () => {
-            const params = new URLSearchParams({ limit: String(LIMIT), offset: String(page * LIMIT) });
+    const {
+        data: historyPages,
+        isLoading: historyLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        refetch: refetchHistory
+    } = useInfiniteQuery({
+        queryKey: ['readingHistory', filterUser, filterTopic],
+        queryFn: async ({ pageParam = 0 }) => {
+            const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) });
             if (filterUser) params.set('user_id', filterUser);
             if (filterTopic) params.set('topic', filterTopic);
             const res = await api.get(`/readings/history?${params}`);
             return res.data;
-        }
+        },
+        getNextPageParam: (lastPage: any) => {
+            const p = lastPage?.pagination;
+            if (!p || !p.has_more) return undefined;
+            return p.offset + p.limit;
+        },
+        initialPageParam: 0
     });
 
-    const readings = historyData?.data || [];
-    const pagination = historyData?.pagination || { total: 0 };
-    const totalPages = Math.ceil(pagination.total / LIMIT);
+    const readings = historyPages?.pages?.flatMap((p: any) => p.data || []) || [];
+    const totalCount = historyPages?.pages?.[0]?.pagination?.total || 0;
+
+    // Infinite scroll observer
+    useEffect(() => {
+        if (!loadMoreRef.current || !hasNextPage) return;
+        const observer = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+            }
+        }, { threshold: 0.1 });
+        observer.observe(loadMoreRef.current);
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const handleRefresh = () => { refetchStats(); refetchHistory(); };
 
     const topicColors: Record<string, string> = {
-        'deep_dive': 'bg-purple-100 text-purple-700',
         'tarot': 'bg-amber-100 text-amber-700',
-        'tarot_celtic_cross': 'bg-orange-100 text-orange-700',
         'wallpaper': 'bg-pink-100 text-pink-700',
         'celestial_bond': 'bg-blue-100 text-blue-700',
         'chat_followup': 'bg-teal-100 text-teal-700',
+        'general': 'bg-slate-100 text-slate-700',
+        // Deep dive topics (saved as actual topic name)
+        'finance': 'bg-emerald-100 text-emerald-700',
+        'love': 'bg-rose-100 text-rose-700',
+        'career': 'bg-indigo-100 text-indigo-700',
+        'health': 'bg-green-100 text-green-700',
+        'education': 'bg-cyan-100 text-cyan-700',
+        'micro_timing': 'bg-violet-100 text-violet-700',
     };
+
+    const topicLabels: Record<string, string> = {
+        'tarot': 'Tarot 3 Card',
+        'tarot_celtic_cross': 'Celtic Cross',
+        'wallpaper': 'Wallpaper',
+        'celestial_bond': 'Celestial Bond',
+        'chat_followup': 'Chat Followup',
+        'finance': 'Deep Dive: การเงิน',
+        'love': 'Deep Dive: ความรัก',
+        'career': 'Deep Dive: การงาน',
+        'health': 'Deep Dive: สุขภาพ',
+        'education': 'Deep Dive: การศึกษา',
+        'micro_timing': 'ฤกษ์ยามจิ๋ว',
+        'general': 'General',
+    };
+
+    // Dynamic topic options from backend
+    const distinctTopics: string[] = stats?.distinct_topics || [];
+
+    const alltime = stats?.alltime || {};
+    const today = stats?.today || {};
+    const week = stats?.week || {};
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 py-6 px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center border-b border-slate-200 pb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Readings Analytics</h1>
-                    <p className="text-slate-500 mt-2">Daily overview and detailed reading history viewer.</p>
+                    <p className="text-slate-500 mt-2">Overview and detailed reading history viewer.</p>
                 </div>
                 <button onClick={handleRefresh} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
                     <RefreshCw size={20} className={statsLoading || historyLoading ? 'animate-spin' : ''} />
@@ -68,48 +119,80 @@ export default function ReadingsPage() {
                 <button onClick={() => setActiveTab('history')}
                     className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'history' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
                     <BookOpen size={16} /> Reading History
-                    {pagination.total > 0 && <span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded-full">{pagination.total}</span>}
+                    {totalCount > 0 && <span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded-full">{totalCount}</span>}
                 </button>
             </div>
 
             {/* ====== TAB: OVERVIEW ====== */}
             {activeTab === 'overview' && (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatCard title="Total Readings Today" value={stats?.total_readings || 0} icon={<Activity size={24} />} className="border-l-4 border-l-indigo-500" />
-                        <StatCard title="Daily Forecasts" value={stats?.breakdown?.daily_forecast || 0} icon={<Calendar size={24} />} className="border-l-4 border-l-blue-400" />
-                        <StatCard title="Deep Dives" value={stats?.breakdown?.deep_dive || 0} icon={<Sparkles size={24} />} className="border-l-4 border-l-purple-500" />
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 border-l-indigo-500">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">All-Time Readings</p>
+                            <p className="text-3xl font-bold text-slate-900 mt-2">{alltime.total || 0}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 border-l-amber-400">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Coins Earned</p>
+                            <p className="text-3xl font-bold text-amber-600 mt-2">{(alltime.total_coins || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 border-l-blue-400">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">This Week</p>
+                            <p className="text-3xl font-bold text-slate-900 mt-2">{week.total || 0}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 border-l-green-400">
+                            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Today</p>
+                            <p className="text-3xl font-bold text-slate-900 mt-2">{today.total || 0}</p>
+                            <p className="text-xs text-slate-400 mt-1">Forecasts: {today.daily_forecast || 0} | Readings: {today.readings || 0}</p>
+                        </div>
                     </div>
 
+                    {/* Topic Breakdown (All-Time) */}
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
-                            <BookOpen size={20} className="text-indigo-500" /> Topic Popularity
+                            <TrendingUp size={20} className="text-indigo-500" /> Topic Breakdown (All-Time)
                         </h2>
-                        <div className="space-y-4">
-                            {Object.entries(stats?.topics || {}).sort(([, a]: any, [, b]: any) => b - a).map(([topic, count]: any) => {
-                                const max = Math.max(...Object.values(stats?.topics || {}) as number[], 1);
+                        <div className="space-y-3">
+                            {Object.entries(alltime.topics || {}).sort(([, a]: any, [, b]: any) => b - a).map(([topic, count]: any) => {
+                                const max = Math.max(...Object.values(alltime.topics || {}) as number[], 1);
                                 const percent = (count / max) * 100;
                                 return (
                                     <div key={topic} className="space-y-1">
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-slate-700 font-medium capitalize">{topic.replace(/_/g, ' ')}</span>
-                                            <span className="text-slate-500">{count}</span>
+                                            <span className="text-slate-700 font-medium">{topicLabels[topic] || topic.replace(/_/g, ' ')}</span>
+                                            <span className="text-slate-500 font-mono text-xs">{count}</span>
                                         </div>
-                                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                                            <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${percent}%` }} />
+                                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${percent}%` }} />
                                         </div>
                                     </div>
                                 );
                             })}
-                            {Object.keys(stats?.topics || {}).length === 0 && (
-                                <p className="text-slate-400 text-center py-4">No data available today</p>
+                            {Object.keys(alltime.topics || {}).length === 0 && (
+                                <p className="text-slate-400 text-center py-6">No reading data yet</p>
                             )}
                         </div>
                     </div>
+
+                    {/* Today Breakdown */}
+                    {Object.keys(today.topics || {}).length > 0 && (
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                                <Calendar size={20} className="text-blue-500" /> Today&apos;s Readings
+                            </h2>
+                            <div className="flex flex-wrap gap-3">
+                                {Object.entries(today.topics).sort(([, a]: any, [, b]: any) => b - a).map(([topic, count]: any) => (
+                                    <div key={topic} className={`px-4 py-2 rounded-lg text-sm font-medium ${topicColors[topic] || 'bg-slate-100 text-slate-700'}`}>
+                                        {topicLabels[topic] || topic.replace(/_/g, ' ')}: <span className="font-bold">{count}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
 
-            {/* ====== TAB: READING HISTORY ====== */}
+            {/* ====== TAB: READING HISTORY (Infinite Scroll) ====== */}
             {activeTab === 'history' && (
                 <div className="space-y-4">
                     {/* Filters */}
@@ -119,26 +202,23 @@ export default function ReadingsPage() {
                             <div className="relative">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input type="text" placeholder="User UUID..." value={filterUser}
-                                    onChange={e => { setFilterUser(e.target.value); setPage(0); }}
+                                    onChange={e => setFilterUser(e.target.value)}
                                     className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>
                         </div>
-                        <div className="min-w-[180px]">
+                        <div className="min-w-[200px]">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Filter by Topic</label>
-                            <select value={filterTopic} onChange={e => { setFilterTopic(e.target.value); setPage(0); }}
+                            <select value={filterTopic} onChange={e => setFilterTopic(e.target.value)}
                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                                <option value="">All Topics</option>
-                                <option value="deep_dive">Deep Dive</option>
-                                <option value="tarot">Tarot</option>
-                                <option value="tarot_celtic_cross">Celtic Cross</option>
-                                <option value="wallpaper">Wallpaper</option>
-                                <option value="celestial_bond">Celestial Bond</option>
-                                <option value="chat_followup">Chat Followup</option>
+                                <option value="">All Topics ({totalCount})</option>
+                                {distinctTopics.map(t => (
+                                    <option key={t} value={t}>{topicLabels[t] || t.replace(/_/g, ' ')}</option>
+                                ))}
                             </select>
                         </div>
                         {(filterUser || filterTopic) && (
-                            <button onClick={() => { setFilterUser(''); setFilterTopic(''); setPage(0); }}
-                                className="px-3 py-2 text-sm text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg">
+                            <button onClick={() => { setFilterUser(''); setFilterTopic(''); }}
+                                className="px-3 py-2 text-sm text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg transition-colors">
                                 Clear Filters
                             </button>
                         )}
@@ -148,7 +228,7 @@ export default function ReadingsPage() {
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                                <thead className="bg-slate-50 border-b border-slate-200">
+                                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                                     <tr>
                                         <th className="text-left px-4 py-3 font-semibold text-slate-600">User</th>
                                         <th className="text-left px-4 py-3 font-semibold text-slate-600">Topic</th>
@@ -161,7 +241,7 @@ export default function ReadingsPage() {
                                 <tbody className="divide-y divide-slate-100">
                                     {historyLoading ? (
                                         <tr><td colSpan={6} className="text-center py-10 text-slate-400">
-                                            <RefreshCw className="mx-auto h-5 w-5 animate-spin mb-2" /> Loading...
+                                            <Loader2 className="mx-auto h-5 w-5 animate-spin mb-2" /> Loading...
                                         </td></tr>
                                     ) : readings.length === 0 ? (
                                         <tr><td colSpan={6} className="text-center py-16 text-slate-400">
@@ -178,14 +258,14 @@ export default function ReadingsPage() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${topicColors[r.topic] || 'bg-slate-100 text-slate-700'}`}>
-                                                    {r.topic?.replace(/_/g, ' ')}
+                                                    {topicLabels[r.topic] || r.topic?.replace(/_/g, ' ')}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600 text-xs">{r.subtype || '—'}</td>
+                                            <td className="px-4 py-3 text-slate-600 text-xs">{r.subtype?.replace(/_/g, ' ') || '—'}</td>
                                             <td className="px-4 py-3">
                                                 <span className="text-xs font-semibold text-amber-600">{r.coins_spent || 0} <Coins size={10} className="inline" /></span>
                                             </td>
-                                            <td className="px-4 py-3 text-xs text-slate-500">{new Date(r.created_at).toLocaleString('th-TH')}</td>
+                                            <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{new Date(r.created_at).toLocaleString('th-TH')}</td>
                                             <td className="px-4 py-3 text-center">
                                                 <button onClick={() => setSelectedReading(r)}
                                                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
@@ -198,24 +278,20 @@ export default function ReadingsPage() {
                             </table>
                         </div>
 
-                        {/* Pagination */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
-                                <span className="text-xs text-slate-500">
-                                    {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, pagination.total)} of {pagination.total}
-                                </span>
-                                <div className="flex gap-1">
-                                    <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-white disabled:opacity-30">
-                                        <ChevronLeft size={16} />
-                                    </button>
-                                    <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-white disabled:opacity-30">
-                                        <ChevronRight size={16} />
-                                    </button>
+                        {/* Infinite scroll trigger */}
+                        <div ref={loadMoreRef} className="px-4 py-3 border-t border-slate-100">
+                            {isFetchingNextPage ? (
+                                <div className="flex items-center justify-center gap-2 text-slate-400 text-sm py-2">
+                                    <Loader2 size={16} className="animate-spin" /> Loading more...
                                 </div>
-                            </div>
-                        )}
+                            ) : hasNextPage ? (
+                                <p className="text-center text-xs text-slate-400 py-2">Scroll down to load more</p>
+                            ) : readings.length > 0 ? (
+                                <p className="text-center text-xs text-slate-400 py-2">
+                                    Showing all {readings.length} of {totalCount} readings
+                                </p>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
             )}
@@ -243,7 +319,7 @@ export default function ReadingsPage() {
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-3">
                                     <p className="text-[10px] uppercase font-semibold text-slate-400">Topic</p>
-                                    <p className="text-sm font-medium text-slate-700 mt-1 capitalize">{selectedReading.topic?.replace(/_/g, ' ')}</p>
+                                    <p className="text-sm font-medium text-slate-700 mt-1">{topicLabels[selectedReading.topic] || selectedReading.topic?.replace(/_/g, ' ')}</p>
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-3">
                                     <p className="text-[10px] uppercase font-semibold text-slate-400">Coins Spent</p>

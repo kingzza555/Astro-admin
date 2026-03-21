@@ -1,20 +1,46 @@
 "use client";
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ScrollText, RefreshCw, Filter } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { ScrollText, RefreshCw, Filter, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function AuditLogsPage() {
-    const [offset, setOffset] = useState(0);
     const LIMIT = 30;
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
-    const { data: logs, isLoading, refetch } = useQuery({
-        queryKey: ['audit-logs', offset],
-        queryFn: async () => {
-            const res = await api.get(`/audit-logs?limit=${LIMIT}&offset=${offset}`);
-            return res.data;
-        }
+    const {
+        data: pages,
+        isLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        refetch
+    } = useInfiniteQuery({
+        queryKey: ['audit-logs'],
+        queryFn: async ({ pageParam = 0 }) => {
+            const res = await api.get(`/audit-logs?limit=${LIMIT}&offset=${pageParam}`);
+            return { data: res.data, offset: pageParam };
+        },
+        getNextPageParam: (lastPage: any) => {
+            if (!lastPage?.data || lastPage.data.length < LIMIT) return undefined;
+            return lastPage.offset + LIMIT;
+        },
+        initialPageParam: 0
     });
+
+    const logs = pages?.pages?.flatMap((p: any) => p.data || []) || [];
+
+    // Infinite scroll observer
+    useEffect(() => {
+        if (!loadMoreRef.current || !hasNextPage) return;
+        const observer = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+            }
+        }, { threshold: 0.1 });
+        observer.observe(loadMoreRef.current);
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const actionColors: Record<string, string> = {
         'banned_user': 'bg-red-100 text-red-700',
@@ -92,17 +118,19 @@ export default function AuditLogsPage() {
                 </table>
             </div>
 
-            {/* Pagination */}
-            <div className="flex justify-between items-center">
-                <button onClick={() => setOffset(Math.max(0, offset - LIMIT))} disabled={offset === 0}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                    Previous
-                </button>
-                <span className="text-sm text-slate-500">Showing {offset + 1} - {offset + (logs?.length || 0)}</span>
-                <button onClick={() => setOffset(offset + LIMIT)} disabled={(logs?.length || 0) < LIMIT}
-                    className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                    Next
-                </button>
+            {/* Infinite scroll trigger */}
+            <div ref={loadMoreRef} className="py-4">
+                {isFetchingNextPage ? (
+                    <div className="flex items-center justify-center gap-2 text-slate-400 text-sm py-2">
+                        <Loader2 size={16} className="animate-spin" /> Loading more...
+                    </div>
+                ) : hasNextPage ? (
+                    <p className="text-center text-xs text-slate-400 py-2">Scroll down to load more</p>
+                ) : logs.length > 0 ? (
+                    <p className="text-center text-xs text-slate-400 py-2">
+                        Showing all {logs.length} audit logs
+                    </p>
+                ) : null}
             </div>
         </div>
     );

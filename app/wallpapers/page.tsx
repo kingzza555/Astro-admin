@@ -1,7 +1,7 @@
 "use client";
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Image as ImageIcon, RefreshCw, Trash2, Search, Users, BarChart3, ChevronLeft, ChevronRight, X, Eye, Filter } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Image as ImageIcon, RefreshCw, Trash2, Search, Users, BarChart3, X, Eye, Filter, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
 
 const CATEGORIES = [
@@ -32,20 +32,33 @@ export default function WallpapersPage() {
     const [filterUser, setFilterUser] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [category, setCategory] = useState('all');
-    const [page, setPage] = useState(0);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const LIMIT = 24;
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
-    const { data: galleryData, isLoading, refetch } = useQuery({
-        queryKey: ['wallpapers', page, filterUser, category, searchQuery],
-        queryFn: async () => {
-            const params = new URLSearchParams({ limit: String(LIMIT), offset: String(page * LIMIT) });
+    const {
+        data: galleryPages,
+        isLoading,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        refetch
+    } = useInfiniteQuery({
+        queryKey: ['wallpapers', filterUser, category, searchQuery],
+        queryFn: async ({ pageParam = 0 }) => {
+            const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) });
             if (filterUser) params.set('user_id', filterUser);
             if (category !== 'all') params.set('category', category);
             if (searchQuery.trim()) params.set('search', searchQuery.trim());
             const res = await api.get(`/wallpapers/search?${params}`);
             return res.data;
-        }
+        },
+        getNextPageParam: (lastPage: any) => {
+            const p = lastPage?.pagination;
+            if (!p || !p.has_more) return undefined;
+            return p.offset + p.limit;
+        },
+        initialPageParam: 0
     });
 
     const { data: stats } = useQuery({
@@ -53,9 +66,20 @@ export default function WallpapersPage() {
         queryFn: async () => { const res = await api.get('/wallpapers/stats'); return res.data; }
     });
 
-    const wallpapers = galleryData?.data || [];
-    const pagination = galleryData?.pagination || { total: 0 };
-    const totalPages = Math.ceil(pagination.total / LIMIT);
+    const wallpapers = galleryPages?.pages?.flatMap((p: any) => p.data || []) || [];
+    const totalCount = galleryPages?.pages?.[0]?.pagination?.total || 0;
+
+    // Infinite scroll observer
+    useEffect(() => {
+        if (!loadMoreRef.current || !hasNextPage) return;
+        const observer = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+            }
+        }, { threshold: 0.1 });
+        observer.observe(loadMoreRef.current);
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => { await api.delete(`/wallpapers/${id}`); },
@@ -71,7 +95,6 @@ export default function WallpapersPage() {
         setFilterUser('');
         setSearchQuery('');
         setCategory('all');
-        setPage(0);
     };
 
     const hasActiveFilters = filterUser || searchQuery || category !== 'all';
@@ -125,14 +148,14 @@ export default function WallpapersPage() {
                                 <div className="relative">
                                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                     <input type="text" placeholder="ชื่อผู้ใช้ หรือ email..." value={searchQuery}
-                                        onChange={e => { setSearchQuery(e.target.value); setFilterUser(''); setPage(0); }}
+                                        onChange={e => { setSearchQuery(e.target.value); setFilterUser(''); }}
                                         className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500" />
                                 </div>
                             </div>
                             <div className="min-w-[200px]">
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
                                 <input type="text" placeholder="User UUID..." value={filterUser}
-                                    onChange={e => { setFilterUser(e.target.value); setSearchQuery(''); setPage(0); }}
+                                    onChange={e => { setFilterUser(e.target.value); setSearchQuery(''); }}
                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono" />
                             </div>
                             {hasActiveFilters && (
@@ -148,14 +171,14 @@ export default function WallpapersPage() {
                             <Filter size={14} className="text-slate-400" />
                             {CATEGORIES.map(cat => (
                                 <button key={cat.value}
-                                    onClick={() => { setCategory(cat.value); setPage(0); }}
+                                    onClick={() => { setCategory(cat.value); }}
                                     className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
                                         category === cat.value ? cat.color + ' ring-2 ring-offset-1 ring-pink-300' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                                     }`}>
                                     {cat.label}
                                 </button>
                             ))}
-                            <span className="text-xs text-slate-400 ml-2">{pagination.total} wallpapers found</span>
+                            <span className="text-xs text-slate-400 ml-2">{totalCount} wallpapers found</span>
                         </div>
                     </div>
 
@@ -203,7 +226,7 @@ export default function WallpapersPage() {
                                         )}
                                         <div className="p-3">
                                             <div className="flex items-center justify-between">
-                                                <button onClick={() => { setFilterUser(w.user_id); setSearchQuery(''); setPage(0); }}
+                                                <button onClick={() => { setFilterUser(w.user_id); setSearchQuery(''); }}
                                                     className="text-xs text-indigo-600 hover:underline truncate max-w-[160px]" title={`${w.user_name}\n${w.user_email || w.user_id}`}>
                                                     {w.user_name || w.user_id?.slice(0, 10)}
                                                 </button>
@@ -226,24 +249,20 @@ export default function WallpapersPage() {
                         </div>
                     )}
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200">
-                            <span className="text-xs text-slate-500">
-                                {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, pagination.total)} of {pagination.total}
-                            </span>
-                            <div className="flex gap-1">
-                                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">
-                                    <ChevronLeft size={16} />
-                                </button>
-                                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30">
-                                    <ChevronRight size={16} />
-                                </button>
+                    {/* Infinite scroll trigger */}
+                    <div ref={loadMoreRef} className="py-4">
+                        {isFetchingNextPage ? (
+                            <div className="flex items-center justify-center gap-2 text-slate-400 text-sm py-2">
+                                <Loader2 size={16} className="animate-spin" /> Loading more...
                             </div>
-                        </div>
-                    )}
+                        ) : hasNextPage ? (
+                            <p className="text-center text-xs text-slate-400 py-2">Scroll down to load more</p>
+                        ) : wallpapers.length > 0 ? (
+                            <p className="text-center text-xs text-slate-400 py-2">
+                                Showing all {wallpapers.length} of {totalCount} wallpapers
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
             )}
 
@@ -292,7 +311,7 @@ export default function WallpapersPage() {
                                     return (
                                         <div key={u.user_id} className="flex items-center gap-3">
                                             <span className="text-xs font-bold text-slate-400 w-6 text-right">#{i + 1}</span>
-                                            <button onClick={() => { setFilterUser(u.user_id); setActiveTab('gallery'); setPage(0); }}
+                                            <button onClick={() => { setFilterUser(u.user_id); setActiveTab('gallery'); }}
                                                 className="text-sm text-indigo-600 hover:underline min-w-[120px] truncate text-left" title={u.user_id}>
                                                 {u.user_name}
                                             </button>
