@@ -1,16 +1,61 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { Activity, Sparkles, BookOpen, Calendar, RefreshCw, Search, Eye, X, User, Clock, Coins, TrendingUp, Hash, Loader2 } from 'lucide-react';
+import { Activity, BookOpen, Calendar, RefreshCw, Search, Eye, X, User, Clock, Coins, TrendingUp, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
+
+// =====================================================
+// ACTUAL topic/subtype values used in the database:
+// Deep Dive การเงิน → topic="finance", subtype="finance_daily/weekly/monthly"
+// Deep Dive ความรัก → topic="love", subtype="love_daily/weekly/monthly"
+// Deep Dive การงาน → topic="goals", subtype="goals_daily/weekly/monthly"
+// Micro Timing    → topic="micro_timing", subtype="micro_timing_*"
+// ไพ่ทาโรต์ 3 ใบ  → topic="tarot", subtype="three_card_spread"
+// ไพ่ทาโรต์ 10 ใบ → topic="tarot", subtype="celtic_cross"
+// Wallpaper (AI)  → topic="wallpaper", subtype="<focus>"
+// Wallpaper (Manual) → topic="wallpaper", subtype="manual_<focus>"
+// =====================================================
+
+// Filter options: each has { value, label, filterTopic, filterSubtype }
+const READING_FILTERS = [
+    { value: '', label: 'ทุกหัวข้อ', filterTopic: '', filterSubtype: '' },
+    // Deep Dive
+    { value: 'finance', label: 'Deep Dive: การเงิน', filterTopic: 'finance', filterSubtype: '' },
+    { value: 'love', label: 'Deep Dive: ความรัก', filterTopic: 'love', filterSubtype: '' },
+    { value: 'goals', label: 'Deep Dive: การงาน (เป้าหมาย)', filterTopic: 'goals', filterSubtype: '' },
+    // Micro Timing
+    { value: 'micro_timing', label: 'ฤกษ์ยามจิ๋ว (Micro Timing)', filterTopic: 'micro_timing', filterSubtype: '' },
+    // ไพ่ทาโรต์ — DIFFERENT subtype under same topic "tarot"
+    { value: 'tarot_3', label: 'ไพ่ทาโรต์ 3 ใบ (Tarot 3 Card)', filterTopic: 'tarot', filterSubtype: 'three_card_spread' },
+    { value: 'tarot_10', label: 'ไพ่ทาโรต์ 10 ใบ (Celtic Cross)', filterTopic: 'tarot', filterSubtype: 'celtic_cross' },
+    // Wallpaper
+    { value: 'wallpaper_ai', label: 'Mutelu Wallpaper (AI เลือก)', filterTopic: 'wallpaper', filterSubtype: '' },
+    // Other
+    { value: 'celestial_bond', label: 'Celestial Bond', filterTopic: 'celestial_bond', filterSubtype: '' },
+    { value: 'chat_followup', label: 'Chat Followup', filterTopic: 'chat_followup', filterSubtype: '' },
+    { value: 'general', label: 'General', filterTopic: 'general', filterSubtype: '' },
+];
 
 export default function ReadingsPage() {
     const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
     const [filterUser, setFilterUser] = useState('');
-    const [filterTopic, setFilterTopic] = useState('');
+    const [filterValue, setFilterValue] = useState('');  // dropdown value
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedReading, setSelectedReading] = useState<any>(null);
     const LIMIT = 30;
     const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    // Debounce search
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Resolve filterValue to real topic + subtype
+    const selectedFilter = READING_FILTERS.find(f => f.value === filterValue) || READING_FILTERS[0];
+    const filterTopic = selectedFilter.filterTopic;
+    const filterSubtype = selectedFilter.filterSubtype;
 
     const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
         queryKey: ['readingStats'],
@@ -28,11 +73,13 @@ export default function ReadingsPage() {
         isFetchingNextPage,
         refetch: refetchHistory
     } = useInfiniteQuery({
-        queryKey: ['readingHistory', filterUser, filterTopic],
+        queryKey: ['readingHistory', filterUser, filterTopic, filterSubtype, debouncedSearch],
         queryFn: async ({ pageParam = 0 }) => {
             const params = new URLSearchParams({ limit: String(LIMIT), offset: String(pageParam) });
             if (filterUser) params.set('user_id', filterUser);
             if (filterTopic) params.set('topic', filterTopic);
+            if (filterSubtype) params.set('subtype', filterSubtype);
+            if (debouncedSearch) params.set('search', debouncedSearch);
             const res = await api.get(`/readings/history?${params}`);
             return res.data;
         },
@@ -67,32 +114,28 @@ export default function ReadingsPage() {
         'celestial_bond': 'bg-blue-100 text-blue-700',
         'chat_followup': 'bg-teal-100 text-teal-700',
         'general': 'bg-slate-100 text-slate-700',
-        // Deep dive topics (saved as actual topic name)
         'finance': 'bg-emerald-100 text-emerald-700',
         'love': 'bg-rose-100 text-rose-700',
-        'career': 'bg-indigo-100 text-indigo-700',
-        'health': 'bg-green-100 text-green-700',
-        'education': 'bg-cyan-100 text-cyan-700',
+        'goals': 'bg-indigo-100 text-indigo-700',
         'micro_timing': 'bg-violet-100 text-violet-700',
     };
 
     const topicLabels: Record<string, string> = {
-        'tarot': 'Tarot 3 Card',
-        'tarot_celtic_cross': 'Celtic Cross',
+        'tarot': 'Tarot',
         'wallpaper': 'Wallpaper',
         'celestial_bond': 'Celestial Bond',
         'chat_followup': 'Chat Followup',
         'finance': 'Deep Dive: การเงิน',
         'love': 'Deep Dive: ความรัก',
-        'career': 'Deep Dive: การงาน',
-        'health': 'Deep Dive: สุขภาพ',
-        'education': 'Deep Dive: การศึกษา',
+        'goals': 'Deep Dive: การงาน',
         'micro_timing': 'ฤกษ์ยามจิ๋ว',
         'general': 'General',
     };
 
-    // Dynamic topic options from backend
-    const distinctTopics: string[] = stats?.distinct_topics || [];
+    const subtypeLabels: Record<string, string> = {
+        'three_card_spread': 'ไพ่ 3 ใบ',
+        'celtic_cross': 'ไพ่ 10 ใบ (Celtic Cross)',
+    };
 
     const alltime = stats?.alltime || {};
     const today = stats?.today || {};
@@ -126,7 +169,6 @@ export default function ReadingsPage() {
             {/* ====== TAB: OVERVIEW ====== */}
             {activeTab === 'overview' && (
                 <>
-                    {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 border-l-4 border-l-indigo-500">
                             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">All-Time Readings</p>
@@ -147,7 +189,6 @@ export default function ReadingsPage() {
                         </div>
                     </div>
 
-                    {/* Topic Breakdown (All-Time) */}
                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <h2 className="text-lg font-semibold text-slate-800 mb-6 flex items-center gap-2">
                             <TrendingUp size={20} className="text-indigo-500" /> Topic Breakdown (All-Time)
@@ -174,7 +215,6 @@ export default function ReadingsPage() {
                         </div>
                     </div>
 
-                    {/* Today Breakdown */}
                     {Object.keys(today.topics || {}).length > 0 && (
                         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                             <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -192,34 +232,33 @@ export default function ReadingsPage() {
                 </>
             )}
 
-            {/* ====== TAB: READING HISTORY (Infinite Scroll) ====== */}
+            {/* ====== TAB: READING HISTORY ====== */}
             {activeTab === 'history' && (
                 <div className="space-y-4">
                     {/* Filters */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-3 items-end">
                         <div className="flex-1 min-w-[200px]">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">ค้นหา (ชื่อ / อีเมล / User ID)</label>
                             <div className="relative">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input type="text" placeholder="User UUID..." value={filterUser}
-                                    onChange={e => setFilterUser(e.target.value)}
+                                <input type="text" placeholder="พิมพ์ชื่อ, อีเมล หรือ User UUID..." value={searchQuery}
+                                    onChange={e => { setSearchQuery(e.target.value); setFilterUser(''); }}
                                     className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>
                         </div>
-                        <div className="min-w-[200px]">
+                        <div className="min-w-[260px]">
                             <label className="block text-xs font-medium text-slate-500 mb-1">Filter by Topic</label>
-                            <select value={filterTopic} onChange={e => setFilterTopic(e.target.value)}
+                            <select value={filterValue} onChange={e => setFilterValue(e.target.value)}
                                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-                                <option value="">All Topics ({totalCount})</option>
-                                {distinctTopics.map(t => (
-                                    <option key={t} value={t}>{topicLabels[t] || t.replace(/_/g, ' ')}</option>
+                                {READING_FILTERS.map(f => (
+                                    <option key={f.value} value={f.value}>{f.label}</option>
                                 ))}
                             </select>
                         </div>
-                        {(filterUser || filterTopic) && (
-                            <button onClick={() => { setFilterUser(''); setFilterTopic(''); }}
+                        {(searchQuery || filterUser || filterValue) && (
+                            <button onClick={() => { setSearchQuery(''); setFilterUser(''); setFilterValue(''); }}
                                 className="px-3 py-2 text-sm text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg transition-colors">
-                                Clear Filters
+                                ล้าง Filter
                             </button>
                         )}
                     </div>
@@ -252,7 +291,7 @@ export default function ReadingsPage() {
                                     ) : readings.map((r: any) => (
                                         <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-4 py-3">
-                                                <button onClick={() => setFilterUser(r.user_id)} className="text-indigo-600 hover:underline text-xs font-mono truncate max-w-[140px] block" title={r.user_id}>
+                                                <button onClick={() => { setSearchQuery(''); setFilterUser(r.user_id); }} className="text-indigo-600 hover:underline text-xs font-mono truncate max-w-[140px] block" title={r.user_id}>
                                                     {r.user_name || r.user_id?.slice(0, 8)}
                                                 </button>
                                             </td>
@@ -261,7 +300,9 @@ export default function ReadingsPage() {
                                                     {topicLabels[r.topic] || r.topic?.replace(/_/g, ' ')}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-slate-600 text-xs">{r.subtype?.replace(/_/g, ' ') || '—'}</td>
+                                            <td className="px-4 py-3 text-slate-600 text-xs">
+                                                {subtypeLabels[r.subtype] || r.subtype?.replace(/_/g, ' ') || '—'}
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <span className="text-xs font-semibold text-amber-600">{r.coins_spent || 0} <Coins size={10} className="inline" /></span>
                                             </td>

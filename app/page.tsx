@@ -12,13 +12,22 @@ import {
   Server
 } from 'lucide-react';
 import api from '@/lib/api';
+
+const CHART_RANGES = [
+  { value: 7, label: '7 วัน' },
+  { value: 30, label: '30 วัน' },
+  { value: 90, label: '3 เดือน' },
+  { value: 180, label: '6 เดือน' },
+  { value: 365, label: 'ทั้งหมด' },
+];
 import Link from 'next/link';
 import ActivityTable from '@/components/ActivityTable';
 import StatCard from '@/components/StatCard';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line, ComposedChart } from 'recharts';
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('7d');
+  const [chartDays, setChartDays] = useState(30);
   const [activities, setActivities] = useState<any[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -73,10 +82,10 @@ export default function Dashboard() {
   const isLoading = statsLoading || usageLoading || activitiesLoading;
 
   // 4. Chart Data Query
-  const { data: chartData, refetch: refetchCharts } = useQuery({
-    queryKey: ['chartData'],
+  const { data: chartData, isLoading: chartLoading, refetch: refetchCharts } = useQuery({
+    queryKey: ['chartData', chartDays],
     queryFn: async () => {
-      const res = await api.get('/stats/charts?days=7');
+      const res = await api.get(`/stats/charts?days=${chartDays}`);
       return res.data?.data || [];
     }
   });
@@ -120,6 +129,13 @@ export default function Dashboard() {
   const premiumRate = stats.total_users > 0
     ? Math.round((stats.total_premium / stats.total_users) * 100)
     : 0;
+
+  // Calculate estimated cost in THB
+  const estimatedCostTHB = usageStats?.total_estimated_cost_thb
+    ? usageStats.total_estimated_cost_thb.toFixed(2)
+    : usageStats?.total_estimated_cost_usd
+      ? (usageStats.total_estimated_cost_usd * 35.50).toFixed(2)
+      : '0.00';
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 py-6 px-4 sm:px-6 lg:px-8">
@@ -179,15 +195,65 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* Chart Time Range Selector */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <BarChart3 size={16} className="text-indigo-500" /> Charts — {CHART_RANGES.find(r => r.value === chartDays)?.label || `${chartDays} วัน`}
+          </h2>
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs">
+            {CHART_RANGES.map(r => (
+              <button key={r.value} onClick={() => setChartDays(r.value)}
+                className={`px-3 py-1.5 ${chartDays === r.value ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Charts Section */}
-      {chartData && chartData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Readings / Users per Day */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Activity size={16} className="text-indigo-500" /> Readings & New Users (7 Days)
-            </h2>
-            <ResponsiveContainer width="100%" height={220}>
+      <div className="space-y-6">
+        {/* Coin Flow + API Cost Chart */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+            <Coins size={16} className="text-amber-500" /> Coin Flow & API Cost
+          </h2>
+          {chartLoading ? (
+            <div className="flex justify-center py-20 text-slate-300"><RefreshCw className="animate-spin" /></div>
+          ) : chartData && chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: chartDays > 30 ? 10 : 12 }} stroke="#94a3b8" interval={chartDays > 60 ? Math.floor(chartDays / 15) : 0} />
+                <YAxis yAxisId="coins" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                <YAxis yAxisId="cost" orientation="right" tick={{ fontSize: 11 }} stroke="#94a3b8"
+                  tickFormatter={(v: number) => `฿${v}`} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                  formatter={((value: any, name: any) => {
+                    if (name === 'API Cost (฿)') return [`฿${Number(value).toFixed(2)}`, name];
+                    return [value, name];
+                  }) as any}
+                />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                <Bar yAxisId="coins" dataKey="coin_topup" name="Topup" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="coins" dataKey="coin_spend" name="Spend" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="cost" type="monotone" dataKey="api_cost_thb" name="API Cost (฿)" stroke="#8b5cf6" strokeWidth={2.5} dot={chartDays <= 30 ? { r: 3, fill: '#8b5cf6' } : false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center py-16 text-slate-400">ไม่มีข้อมูลในช่วงนี้</div>
+          )}
+        </div>
+
+        {/* Readings & New Users */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
+            <Activity size={16} className="text-indigo-500" /> Readings & New Users
+          </h2>
+          {chartData && chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="readingsFill" x1="0" y1="0" x2="0" y2="1">
@@ -200,35 +266,19 @@ export default function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
+                <XAxis dataKey="label" tick={{ fontSize: chartDays > 30 ? 10 : 12 }} stroke="#94a3b8" interval={chartDays > 60 ? Math.floor(chartDays / 15) : 0} />
+                <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="readings" name="Readings" stroke="#6366f1" fill="url(#readingsFill)" strokeWidth={2} />
                 <Area type="monotone" dataKey="new_users" name="New Users" stroke="#10b981" fill="url(#usersFill)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
-
-          {/* Coin Flow */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Coins size={16} className="text-amber-500" /> Coin Flow (7 Days)
-            </h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }} />
-                <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="coin_topup" name="Topup" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="coin_spend" name="Spend" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          ) : !chartLoading ? (
+            <div className="text-center py-12 text-slate-400">ไม่มีข้อมูลในช่วงนี้</div>
+          ) : null}
         </div>
-      )}
+      </div>
 
       {/* Retention Stats */}
       {retention && (
@@ -290,11 +340,12 @@ export default function Dashboard() {
               <div className="flex justify-center p-8"><RefreshCw className="animate-spin text-slate-300" /></div>
             ) : (
               <div className="space-y-6">
-                <div className="text-center py-2">
+                <Link href="/usage" className="block text-center py-2 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer">
                   <p className="text-sm text-slate-500 uppercase tracking-widest font-medium">Estimated Cost</p>
-                  <h3 className="text-4xl font-bold text-slate-900 mt-2">${usageStats.total_estimated_cost_usd}</h3>
+                  <h3 className="text-4xl font-bold text-slate-900 mt-2">฿{estimatedCostTHB}</h3>
                   <p className="text-xs text-slate-400 mt-1">{usageStats.total_calls.toLocaleString()} API calls</p>
-                </div>
+                  <p className="text-[10px] text-indigo-500 mt-1">คลิกเพื่อดูรายละเอียด →</p>
+                </Link>
 
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-semibold text-slate-400 uppercase">Top Models</h4>
@@ -362,4 +413,3 @@ const StatusRow = ({ label, status }: { label: string, status: string }) => (
     </span>
   </div>
 );
-
