@@ -52,7 +52,10 @@ export default function CoinManagementPage() {
         setTxLoading(true);
         try {
             const res = await api.get('/transactions?limit=50');
-            setTransactions(res.data || []);
+            const raw = res.data;
+            // Handle both old format (plain array) and new format ({data, pagination})
+            const txList = Array.isArray(raw) ? raw : (raw?.data || []);
+            setTransactions(txList);
         } catch (err) {
             console.error('Failed to fetch transactions:', err);
         } finally {
