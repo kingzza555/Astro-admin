@@ -7,6 +7,7 @@ import { th } from 'date-fns/locale';
 
 interface UserResult {
     id: string;
+    firebase_uid?: string;
     email: string;
     display_name: string;
     coins_balance: number;
@@ -156,7 +157,7 @@ export default function CoinManagementPage() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="ค้นหาด้วย email หรือชื่อ..."
+                                placeholder="ค้นหาด้วย email, ชื่อ, UUID หรือ Firebase UID..."
                                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                             />
                         </div>
@@ -202,7 +203,11 @@ export default function CoinManagementPage() {
                                                         <Crown size={12} className="text-amber-500 flex-shrink-0" />
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-slate-400 truncate">{user.email || user.id}</p>
+                                                <p className="text-xs text-slate-400 truncate">{user.email || 'No email'}</p>
+                                                <p className="text-[11px] text-slate-400 font-mono truncate">UUID: {user.id}</p>
+                                                {user.firebase_uid && (
+                                                    <p className="text-[11px] text-slate-400 font-mono truncate">Firebase: {user.firebase_uid}</p>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1 text-sm font-semibold text-amber-600 flex-shrink-0">

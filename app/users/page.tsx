@@ -31,6 +31,7 @@ export default function UsersPage() {
             const matchesSearch = !q ||
                 u.email?.toLowerCase().includes(q) ||
                 u.display_name?.toLowerCase().includes(q) ||
+                u.firebase_uid?.toLowerCase().includes(q) ||
                 u.id?.toLowerCase().includes(q);
 
             const matchesStatus =
@@ -123,7 +124,7 @@ export default function UsersPage() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                     <input
                         type="text"
-                        placeholder="ค้นหาด้วย email, ชื่อ, หรือ ID..."
+                        placeholder="ค้นหาด้วย email, ชื่อ, UUID, หรือ Firebase UID..."
                         className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -180,7 +181,11 @@ export default function UsersPage() {
                                         </div>
                                         <div>
                                             <div className="font-medium text-slate-900">{user.display_name || 'Unknown'}</div>
-                                            <div className="text-slate-400 text-xs">{user.email}</div>
+                                            <div className="text-slate-400 text-xs">{user.email || 'No email'}</div>
+                                            <div className="text-slate-400 text-[11px] font-mono">UUID: {user.id}</div>
+                                            {user.firebase_uid && (
+                                                <div className="text-slate-400 text-[11px] font-mono">Firebase: {user.firebase_uid}</div>
+                                            )}
                                         </div>
                                     </div>
                                 </td>

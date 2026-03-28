@@ -115,7 +115,11 @@ export default function UserDetailPage() {
                 <Link href="/users" className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft size={20} /></Link>
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900">{user.display_name || 'Unknown User'}</h1>
-                    <p className="text-slate-500">{user.email}</p>
+                    <p className="text-slate-500">{user.email || 'No email'}</p>
+                    <div className="mt-2 space-y-1 text-xs text-slate-400 font-mono">
+                        <p>UUID: {user.id}</p>
+                        <p>Firebase UID: {user.firebase_uid || '—'}</p>
+                    </div>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     {user.is_premium && (

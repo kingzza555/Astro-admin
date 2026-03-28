@@ -241,7 +241,7 @@ export default function ReadingsPage() {
                             <label className="block text-xs font-medium text-slate-500 mb-1">ค้นหา (ชื่อ / อีเมล / User ID)</label>
                             <div className="relative">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input type="text" placeholder="พิมพ์ชื่อ, อีเมล หรือ User UUID..." value={searchQuery}
+                                <input type="text" placeholder="พิมพ์ชื่อ, อีเมล, UUID หรือ Firebase UID..." value={searchQuery}
                                     onChange={e => { setSearchQuery(e.target.value); setFilterUser(''); }}
                                     className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>

@@ -154,7 +154,7 @@ export default function WallpapersPage() {
                             </div>
                             <div className="min-w-[200px]">
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Filter by User ID</label>
-                                <input type="text" placeholder="User UUID..." value={filterUser}
+                                <input type="text" placeholder="User UUID หรือ Firebase UID..." value={filterUser}
                                     onChange={e => { setFilterUser(e.target.value); setSearchQuery(''); }}
                                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono" />
                             </div>
