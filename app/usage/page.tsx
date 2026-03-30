@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, ArrowLeft, Zap, FileText, DollarSign, Activity, Clock, Sparkles } from 'lucide-react';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNowStrict, format } from 'date-fns';
 
 interface PoolKeyStatus {
     key_index: number;
@@ -68,9 +68,15 @@ function formatPoolTitle(poolName: string) {
     return poolName === 'text_pool' ? 'Text Pool' : 'Media Pool';
 }
 
-function formatLastUsed(lastUsedAtUnix?: number | null) {
+function formatLastUsed(lastUsedAtUnix?: number | null, nowTick?: number) {
+    void nowTick;
     if (!lastUsedAtUnix) return 'ยังไม่มีข้อมูล';
-    return formatDistanceToNow(new Date(lastUsedAtUnix * 1000), { addSuffix: true });
+    return formatDistanceToNowStrict(new Date(lastUsedAtUnix * 1000), { addSuffix: true });
+}
+
+function formatLastUsedExact(lastUsedAtUnix?: number | null) {
+    if (!lastUsedAtUnix) return null;
+    return format(new Date(lastUsedAtUnix * 1000), 'dd MMM yyyy, HH:mm:ss');
 }
 
 export default function UsagePage() {
@@ -81,6 +87,7 @@ export default function UsagePage() {
     const [aiPools, setAiPools] = useState<AIPoolStatusResponse | null>(null);
     const [poolLoading, setPoolLoading] = useState(true);
     const [poolError, setPoolError] = useState<string | null>(null);
+    const [relativeNowTick, setRelativeNowTick] = useState(Date.now());
 
     // Pagination State
     const [page, setPage] = useState(1);
@@ -139,6 +146,14 @@ export default function UsagePage() {
 
         return () => clearInterval(interval);
     }, [fetchAIPools]);
+
+    useEffect(() => {
+        const ticker = setInterval(() => {
+            setRelativeNowTick(Date.now());
+        }, 30000);
+
+        return () => clearInterval(ticker);
+    }, []);
 
     const totalPages = Math.ceil(totalLogs / LIMIT);
 
@@ -390,7 +405,16 @@ export default function UsagePage() {
                                                                         {key.cooldown_seconds_remaining > 0 ? `${key.cooldown_seconds_remaining}s` : '-'}
                                                                     </td>
                                                                     <td className="px-4 py-3 text-right text-slate-500">
-                                                                        {formatLastUsed(key.last_used_at_unix)}
+                                                                        <div className="flex flex-col items-end">
+                                                                            <span title={formatLastUsedExact(key.last_used_at_unix) || undefined}>
+                                                                                {formatLastUsed(key.last_used_at_unix, relativeNowTick)}
+                                                                            </span>
+                                                                            {formatLastUsedExact(key.last_used_at_unix) ? (
+                                                                                <span className="text-[11px] text-slate-400 mt-1">
+                                                                                    {formatLastUsedExact(key.last_used_at_unix)}
+                                                                                </span>
+                                                                            ) : null}
+                                                                        </div>
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -509,7 +533,7 @@ export default function UsagePage() {
                                                 <div className="flex items-center gap-2">
                                                     <Clock size={14} />
                                                     {format(new Date(log.created_at), 'dd MMM HH:mm')}
-                                                    <span className="text-xs text-slate-400">({formatDistanceToNow(new Date(log.created_at), { addSuffix: true })})</span>
+                                                    <span className="text-xs text-slate-400">({formatDistanceToNowStrict(new Date(log.created_at), { addSuffix: true })})</span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
