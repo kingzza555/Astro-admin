@@ -77,6 +77,10 @@ export default function CoinManagementPage() {
         }
     }, []);
 
+    useEffect(() => {
+        searchUsers('');
+    }, [searchUsers]);
+
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         searchUsers(searchQuery);
